@@ -1,0 +1,69 @@
+// 防抖：如果在限定的延迟时间内重复触发，则重新开始计时，只在最后一次触发中执行函数。
+function debounce(fn, delay) {
+  // 在父级函数中定义，使多次调用返回的闭包函数能访问到同一个变量
+  let timer = null;
+
+  return function () {
+    timer && clearTimeout(timer);
+
+    const args = arguments;
+    timer = setTimeout(() => {
+      fn.apply(this, args);
+    }, delay);
+  };
+}
+
+// 节流：函数被调用后马上执行，并在限定时间内只会执行一次（即使期间被重复触发）
+function throttle(fn, delay) {
+  // 在父级函数中定义，使多次调用返回的闭包函数能访问到同一个变量
+  let timer = null;
+
+  return function () {
+    if (timer === null) {
+      fn.apply(this, arguments);
+
+      timer = setTimeout(() => {
+        timer = null;
+      }, delay);
+    }
+  };
+}
+
+// =========测试用例==========
+
+function print(x, y, z) {
+  console.log('打印：', x, y, z, this.text)
+}
+// 用于测试this指向是否绑定成功
+const obj = {
+  text: 'hello world'
+}
+const dePrint = debounce(print, 1000)
+const throPrint = throttle(print, 1000)
+
+// 防抖函数测试函数
+function testDebounce() {
+  let count = 0 
+
+  let timer = setInterval(() => {
+    dePrint.apply(obj, [1,2,3])
+    count++
+    // 每隔500毫秒尝试触发一次，共尝试4次
+    if (count === 4) clearInterval(timer)
+  }, 500)
+}
+
+// 节流函数测试函数
+function testThrottle() {
+  let count = 0 
+
+  let timer = setInterval(() => {
+    throPrint.apply(obj, [1,2,3])
+    count++
+    // 每隔500毫秒尝试触发一次，共尝试4次
+    if (count === 4) clearInterval(timer)
+  }, 500)
+}
+
+testDebounce() // 最终只会在最后一次运行dePrint
+testThrottle() // 最终会成功运行2次
