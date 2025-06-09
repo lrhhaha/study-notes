@@ -1,4 +1,5 @@
 在 JS 中，一般情况下，我们想判断某个引用值的类型，可以使用 instanceof运算符，如 [] instanceof Array，其返回值为布尔值。    
+
 但如果运行 [] instanceof Object，会发现其结果也是 true，这时我们可能会想当然地认为“数组也是广义上的对象，所以结果是 true”，这个结论本身是没有问题的，但我们还是需要站在 instanceof 的角度上看看，它使用什么标准去评判返回值是 true 还是 false。
 
 # 一、基础理解
@@ -103,7 +104,8 @@ try {
 ```
 
 # 三、关于 Symbol.hasInstance
-JS 引擎规定了 Function.prototype[Symbol.hasInstance] 是不可被重新赋值的，但通过 Symbol.hasInstance，我们可以在定义类的时候，规定 instanceof 在自定义类上的行为。  
+JS 引擎规定了 Function.prototype[Symbol.hasInstance] 是不可被重新赋值的，但通过 Symbol.hasInstance，我们可以在定义类的时候，规定 instanceof 在自定义类上的行为。 
+
 以下是 MDN 中在自定义类中重写 Symbol.hasInstance 的例子。需要注意的是，在自定义类中，需要将 Symbol.hasInstance 作为静态方法，而不是定义在其 prototype 上。
 ```MDN例子
 class MyArray {
@@ -117,6 +119,8 @@ console.log([] instanceof MyArray); // true
 ```
 
 # 四、总结
-综上所述，可以认为 instanceof 运算符的工作原理，实际上是调用右侧操作数的 Symbol.hasInstance 函数，并将左侧操作数作为参数传入，返回函数的返回值。   
-而默认的 Symbol.hasInstance 函数是存放在 Function.prototype 中的。其主要逻辑是检测右侧构造函数的原型对象，是否存在于左侧对象的原型链上，如果存在返回 true，反之返回 false。   
+可以认为 instanceof 运算符的工作原理，实际上是调用右侧操作数的 Symbol.hasInstance 函数，并将左侧操作数作为参数传入，返回函数的返回值。  
+
+而默认的 Symbol.hasInstance 函数是存放在 Function.prototype 中的。其主要逻辑是检测右侧构造函数的原型对象，是否存在于左侧对象的原型链上，如果存在返回 true，反之返回 false。
+
 由于 JS 引擎的限制，我们无法对 Function.prototype[Symbol.hasInstance] 进行重新赋值，但是在自定义类中，我们可以通过 Symbol.hasInstance 来自定义 instanceof 的行为。
