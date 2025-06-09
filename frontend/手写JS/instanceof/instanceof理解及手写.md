@@ -10,9 +10,9 @@ MDN 上对 instanceof 作用的描述为：
 
 既然我们知道了两个最重要的信息，就是 原型链和 原型对象，那么我们就可以转换成代码的角度去思考，如何实现自己的 instanceof 函数了：
 1. 获取构造函数的原型对象（即其 prototype 属性）
-2. 循环读取对象的 __proto__ 属性来获取其原型链上的对象
+2. 循环读取对象的 \_\_proto\_\_ 属性来获取其原型链上的对象
 3. 如果构造函数的原型对象，与原型链上的某个对象相等（堆内存地址相等），则跳出循环，返回 true
-4. 如果循环读取 __proto__ 至原型链末端 null（即 Object.prototype.__proto__）,则证明原型链上不存在构造函数的原型对象，返回 false。
+4. 如果循环读取 \_\_proto\_\_ 至原型链末端 null（即 Object.prototype.\_\_proto\_\_）,则证明原型链上不存在构造函数的原型对象，返回 false。
 根据上述思路，我们可以编写自己的 myInstanceof 函数：
 ```instanceof基础实现
 function myInstanceof(target, constructor) {
@@ -31,9 +31,9 @@ function myInstanceof(target, constructor) {
 ```
 
 > 补充说明：   
-文章会使用 __proto__ 属性来读取实例对象的构造函数的原型对象，但实际上这是非标准的用法（即使它被广泛支持）。    
+文章会使用 \_\_proto\_\_ 属性来读取实例对象的构造函数的原型对象，但实际上这是非标准的用法（即使它被广泛支持）。    
 标准做法应是调用 Reflect.getPrototypeOf()函数。   
-但为了使文章代码更通俗简易，现直接使用 __proto__ 属性。
+但为了使文章代码更通俗简易，现直接使用 \_\_proto\_\_ 属性。
 
 # 二、进阶理解
 除了上述主体逻辑之外，我们还可以深入探究 instanceof 运算符的特点：
