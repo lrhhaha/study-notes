@@ -12,69 +12,89 @@ function asyncAwait(generator) {
 //   });
 // }
 
-
 // queryData1().then(res => {
 //   console.log(res);
 // })
 
-
 function test() {
-  console.log('start');
+  console.log("start");
   const p1 = new Promise((resolve) => {
     setTimeout(() => {
       resolve("p1 data");
     }, 2000);
   });
 
-  p1.then(res => {
+  p1.then((res) => {
     console.log(res);
-  })
+  });
 
-  console.log('end');
+  console.log("end");
 }
 
 // test()
+let x = 1;
+function queryData() {
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      resolve(`data${x++}`);
+    }, 2000);
+  });
+}
 
 async function test1() {
-  console.log('start');
+  console.log("start");
   const p1 = new Promise((resolve) => {
     setTimeout(() => {
       resolve("p1 data");
     }, 2000);
   });
 
-  const res = await p1
+  const res = await p1;
 
   console.log(res);
 }
+
 // test1()
+// console.log('??');
+
+
+
+
+
 
 
 function* test2() {
-  console.log('start');
+  console.log("我就不用promise，看你能不能处理");
+  const res0 = yield "0";
+  console.log(res0);
 
-  const p1 = new Promise((resolve) => {
-    setTimeout(() => {
-      resolve("p1 data");
-    }, 2000);
-  });
+  console.log("请求1");
+  const res1 = yield queryData();
+  console.log(res1);
 
-  const res = yield p1
-
-  console.log(res);
+  console.log("请求2");
+  const res2 = yield queryData();
+  console.log(res2);
 }
-
 
 function myAsyncAwait(generator) {
+  const iterator = generator();
 
-  const iterator = generator()
+  let item = iterator.next();
+  worker(item);
 
-  const { value: p} = iterator.next()
+  function worker(obj) {
+    if (obj.done) return;
 
-  p.then(res => {
-    iterator.next(res)
-  })
+    // 如何obj.value本来就是promise，那么直接返回它，否则创建一个promise，并以obj.value兑现
+    const p = Promise.resolve(obj.value);
 
+    p.then((res) => {
+      obj = iterator.next(res);
+      worker(obj);
+    });
+  }
 }
 
-myAsyncAwait(test2)
+myAsyncAwait(test2);
+console.log('!!!');
