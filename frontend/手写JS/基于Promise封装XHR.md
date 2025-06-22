@@ -1,3 +1,15 @@
+1. 使用Promise封装XMLHttpRequest
+2. 当HTTP状态码在[200, 300)区间，以及304时，视为请求成功
+3. 使用params配置项，处理查询字符串
+4. 使用data配置项，处理请求体内容。请求体数据格式，只简单处理为JSON格式
+5. 响应体内容，如果是JSON格式，则使用JSON.parse处理，否则直接返回
+6. 支持设置请求头
+7. 支持传入timeout配置项，设置请求超时时间
+
+
+1. 借助readystatechange事件，监测请求进度
+2.  
+
 
 ```javascript
 function http({
