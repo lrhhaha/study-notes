@@ -24,6 +24,9 @@ function http({
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
 
+    // timeout设置为0则代表不会超时
+    xhr.timeout = timeout ?? 0
+
     xhr.onreadystatechange = function () {
       // 下载操作已完成
       if (xhr.readyState === 4) {
@@ -76,38 +79,28 @@ function http({
     // 网络中断或无效url
     xhr.onerror = function () {
       clearTimeout(timer);
-      clearInterval(interval)
       timer = null;
-      interval = null
       reject(new Error("Network Error"));
     };
     // 请求完成，无论状态码是什么
     xhr.onload = function () {
       clearTimeout(timer);
-      clearInterval(interval)
       timer = null;
-      interval = null;
     };
+    xhr.ontimeout = function() {
+      reject('timeout')
+    }
 
     let timer;
-    let interval;
     if (timeout) {
       timer = setTimeout(() => {
         if (timer) {
           clearTimeout(timer)
           timer = null;
           xhr.abort();
+          reject('timeout')
         }
       }, timeout);
-    }
-    if (timeout) {
-      interval = setInterval(() => {
-        if (interval) {
-          clearInterval(interval)
-          interval = null
-          xhr.abort();
-        }
-      }, timeout)
     }
 
     xhr.send(strData || undefined);
