@@ -20,8 +20,13 @@ Generator 函数将 JavaScript 异步编程带入了一个全新的阶段。
 众所周知，Promise 是 JS 中异步编程的其中一种解决方案。
 而在 ES2017 中推出了 async/await 语法，借助 async 函数，能让 Promise 的使用更加简洁。
 
-而不知道大家是否了解过，其实 async 是
+而不知道大家是否了解过，其实 async 是 generator 函数的语法糖。
 
+generator函数是JS的一种异步编程解决方案，它的地位和Promise一样，是“异步编程解决方案”。
+
+而async函数严格来说它并不是“异步编程解决方案”，只是generator函数的语法糖，并且专注于简化Promise的使用。
+
+所以我们是可以编写一个函数，使用generator模拟async函数的功能。
 
 ```javascript
 function myAsyncAwait(generator) {
