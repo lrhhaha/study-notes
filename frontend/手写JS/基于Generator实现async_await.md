@@ -1,3 +1,28 @@
+
+Generator函数：ES6（2015年）推出
+async/await函数：ES2017（2017年）推出，是Generator函数的改进版本
+
+Generator 函数是 ES6 提供的一种异步编程解决方案
+
+
+async 函数是什么？一句话，它就是 Generator 函数的语法糖。
+
+
+
+ES6 诞生以前，异步编程的方法，大概有下面四种。
+
+回调函数
+事件监听
+发布/订阅
+Promise 对象
+Generator 函数将 JavaScript 异步编程带入了一个全新的阶段。
+
+众所周知，Promise 是 JS 中异步编程的其中一种解决方案。
+而在 ES2017 中推出了 async/await 语法，借助 async 函数，能让 Promise 的使用更加简洁。
+
+而不知道大家是否了解过，其实 async 是
+
+
 ```javascript
 function myAsyncAwait(generator) {
   const iterator = generator();

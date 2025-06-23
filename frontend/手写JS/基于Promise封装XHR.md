@@ -33,8 +33,8 @@ function basicGetRequest() {
 }
 ```
 
-可见即使是一个简单的 GET 请求，XMLHttpRequest 也需要分四步走，且处理异步操作的方式是颇有年头的回调函数的方式。
-不仅操作起来复杂，稍有不慎还可能出现“回调地狱”的情况。
+可见即使是一个简单的 GET 请求，XMLHttpRequest 也需要分四步走，且处理异步操作的方式是事件监听，
+使用稍显繁琐。
 
 接下来本文将尝试使用 Promise 对 XMLHttpRequest 进行封装，达到类似 fetch 的调用效果。
 
