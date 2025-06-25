@@ -39,8 +39,8 @@ function myInstanceof(target, constructor) {
 除了上述主体逻辑之外，我们还可以深入探究 instanceof 运算符的特点：
 1. 左侧操作数可以是原始值，不会报错，但会直接返回 false
 2. 右侧操作数
-  a. 必须是广义上的对象
-  b. 必须是能读取到 Symbol.hasInstance 属性（当然它是一个函数），然后调用它，并将左侧操作数作为实参传入
+    1. 必须是广义上的对象
+    2. 必须是能读取到 Symbol.hasInstance 属性（当然它是一个函数），然后调用它，并将左侧操作数作为实参传入
 
 这里再提供一些关于 Symbol.hasInstance 的独家消息：
 1. 实际上 Symbol.hasInstance 是存放于 Function.prototype 中的，所以只需判断右侧操作数是否是函数，就能判断它是否是能读取到 Symbol.hasInstance 属性的对象了。
