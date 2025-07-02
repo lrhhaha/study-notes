@@ -37,7 +37,7 @@ ES8 (ECMAScript 2017)：
 
 本文将探究 async/await 的原理，并尝试手写实现 myAsyncAwait 函数。
 
-# 前世今生
+# async/await 的前世今生
 
 在 ECMAScript 2015（即 ES6）中，推出了三个语法：Iterator、Generator、Promise。
 
@@ -53,11 +53,33 @@ ES8 (ECMAScript 2017)：
 
 在 ECMAScript 2017（即 ES8）正式发布 async/await 语法。这才有了我们今天简易的 async/await 写法。
 
-所以 async/await 是 Generator + Promise 异步流程控制方案的简易实现，或者说是其语法糖。它并非是异步操作解决方案。
+所以 async/await 是 Generator + Promise `异步流程控制方案`的简易实现，或者说是其语法糖。它并非是异步操作解决方案。
 
 本文将尝试使用 Generator 和 Promise 等相关知识，编写一个函数，以实现类似 async/await 的异步操作类似同步代码的书写方式。
 
 # 前置知识
+正式开始编写我们的myAsyncAwait函数之前，我们需要了解Iterator和Generator的相关知识。
+
+## Iterator
+ES6中推出了for...of循环之后，我们可以使用其去遍历Array、Map、Set等数据结构，这些能使用for...of循环遍历的数据结构，我们称之为“可遍历的”。
+
+其背后的奥秘就是，这些数据结构都能访问到Symbol.iterator属性，此属性是一个函数，执行之后会返回一个Iterator迭代器对象。而for...of循环正是通过消费Iterator迭代器对象来实现对某个数据结构的遍历操作（for...of循环不关心此刻遍历的数据结构是怎么样的，只关心其是否部署了Symbol.iterator属性）。
+
+
+
+> MDN：Iterator 对象是一个符合迭代器协议的对象，其提供了 next() 方法用以返回迭代器结果对象。
+
+即所谓的Iterator迭代器对象是一个拥有next()方法的对象，其next()方法执行后会返回拥有value和done属性的对象。每次调用其next()方法，都会返回一个拥有value和done属性的对象，直至其done属性值为true。如下图所示：
+
+
+
+
+
+
+
+
+
+
 
 
 
