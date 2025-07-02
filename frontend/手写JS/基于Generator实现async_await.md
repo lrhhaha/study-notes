@@ -58,30 +58,73 @@ ES8 (ECMAScript 2017)：
 本文将尝试使用 Generator 和 Promise 等相关知识，编写一个函数，以实现类似 async/await 的异步操作类似同步代码的书写方式。
 
 # 前置知识
-正式开始编写我们的myAsyncAwait函数之前，我们需要了解Iterator和Generator的相关知识。
+
+正式开始编写我们的 myAsyncAwait 函数之前，我们需要了解 Iterator 和 Generator 的相关知识。
 
 ## Iterator
-ES6中推出了for...of循环之后，我们可以使用其去遍历Array、Map、Set等数据结构，这些能使用for...of循环遍历的数据结构，我们称之为“可遍历的”。
 
-其背后的奥秘就是，这些数据结构都能访问到Symbol.iterator属性，此属性是一个函数，执行之后会返回一个Iterator迭代器对象。而for...of循环正是通过消费Iterator迭代器对象来实现对某个数据结构的遍历操作（for...of循环不关心此刻遍历的数据结构是怎么样的，只关心其是否部署了Symbol.iterator属性）。
+ES6 中推出了 for...of 循环之后，我们可以使用其去遍历 Array、Map、Set 等数据结构，这些能使用 for...of 循环遍历的数据结构，我们称之为“可遍历的”。
 
-
+其背后的奥秘就是，这些数据结构都能访问到 Symbol.iterator 属性，此属性是一个函数，执行之后会返回一个 Iterator 迭代器对象。而 for...of 循环正是通过消费 Iterator 迭代器对象来实现对某个数据结构的遍历操作（for...of 循环不关心此刻遍历的数据结构是怎么样的，只关心其是否部署了 Symbol.iterator 属性）。
 
 > MDN：Iterator 对象是一个符合迭代器协议的对象，其提供了 next() 方法用以返回迭代器结果对象。
 
-即所谓的Iterator迭代器对象是一个拥有next()方法的对象，其next()方法执行后会返回拥有value和done属性的对象。每次调用其next()方法，都会返回一个拥有value和done属性的对象，直至其done属性值为true。如下图所示：
+即所谓的 Iterator 迭代器对象是一个拥有 next()方法的对象，其 next()方法执行后会返回拥有 value 和 done 属性的对象。每次调用其 next()方法，都会返回一个拥有 value 和 done 属性的对象，直至其 done 属性值为 true。  
+如下图所示：
+![06](../assets/images/06.png)
 
+for...of 循环正是调用了目标数据结构上的 Symbol.iterator 函数，得到了 Iterator 对象之后，反复调用其 next()函数，每次得到的 value 值就是本次迭代的值，直至 done 属性为 true，则结束循环。
 
+基于上述描述，我们知道，只要一个数据结构正确地部署了 Symbol.iterator，就可以使用 for...of 对其进行遍历。接下来我们将为一个普通对象部署 Symbol.iterator 属性，看看其是否能使用 for...of 进行循环。
 
+```javascript
+const obj = {
+  a: 1,
+  b: 2,
+};
+// 普通对象不具备Symbol.iterator函数
+console.log(obj[Symbol.iterator]); // undefined
+try {
+  for (let item of obj) {
+    console.log(item);
+  }
+} catch (err) {
+  console.log(err); // // Uncaught TypeError: {} is not iterable
+}
 
+// 编写一个函数，使其返回值是一个Iterator对象
+function gen() {
+  const obj = this;
+  const arr = Object.entries(obj);
+  let index = 0;
+  function next() {
+    if (index < arr.length) {
+      return { value: arr[index++], done: false };
+    } else {
+      return { value: undefined, done: true };
+    }
+  }
 
+  // 返回一个Iterator对象
+  return {
+    next,
+  };
+}
 
+// 为此普通对象部署正确的Symbol.iterator函数
+obj[Symbol.iterator] = gen;
 
+// 可使用for...of循环
+for (let item of obj) {
+  console.log(item);
+}
+// [ 'a', 1 ]
+// [ 'b', 2 ]
+```
 
+上述代码展示了，当我们为一个普通对象部署了 Symbol.iterator 函数之后，就变成了可迭代对象，就可以使用 for...of 进行循环了。
 
-
-
-
+而事实上，Symbol.iterator 不仅能被 for...of 所消费，像扩展运算符、Array.from()等语法或函数其实都在消费 Symbol.iterator。
 
 ```javascript
 function myAsyncAwait(generator) {
