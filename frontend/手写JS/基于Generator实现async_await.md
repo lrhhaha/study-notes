@@ -1,5 +1,3 @@
-# 正文
-
 相信大家平时在编写代码遇到异步操作时，都喜欢使用 Promise，而遇到多个异步任务按顺序执行时，还会使用 async/await 语法简易地实现，而不必“忍受” Promise 长长的链式调用。
 
 ```javascript
@@ -20,8 +18,8 @@ async funtion fn() {
 
 首先简短地总结它们推出的意义：
 
-- Iterator（迭代器）：为各种不同的数据结构提供统一的访问机制。
-- Generator（生成器）：简化 Iterator 对象的生成。
+- [Iterator](https://developer.mozilla.org/zh-CN/docs/Web/JavaScript/Reference/Global_Objects/Iterator)（迭代器）：为各种不同的数据结构提供统一的访问机制。
+- [Generator](https://developer.mozilla.org/zh-CN/docs/Web/JavaScript/Reference/Global_Objects/Generator)（生成器）：简化 Iterator 对象的生成。
 - Promise: 异步操作解决方案（与 Iterator 及 Generator 不存在直接关系）。
 
 后续有开发人员发现了 Generator + Promise 可以实现异步操作类似同步代码的书写方式，只不过需要手写"执行器"去辅助完成。[co.js](https://www.npmjs.com/package/co) 就是其中著名的代表。
@@ -224,7 +222,7 @@ console.log("end");
 3. 整体代码从下往下按顺序执行，如 await 后是 promise，则等待其状态变化后，再往下执行（类似同步代码的效果）。
 4. async 函数的返回值是一个 promise，它的兑现值是函数体中 return 语句表达式的值。
 
-## Generator + Promise 代码实现
+## myAsyncAwait
 
 ### 目标
 
@@ -363,7 +361,7 @@ function myAsyncAwait(generator) {
 ```
 
 至此，myAsyncAwait 方法已经编写完毕，它就是一个合格的 Generator + Promise 异步流程控制方案的执行器，也就是 async/await 的实现原理。
-
+### 测试用例
 测试代码如下所示，可以看到使用 Generator + Promise 的书写方式，与 async/await 的书写方式是“一致”的，并且最终执行表现也是一致的。
 
 ```javascript
