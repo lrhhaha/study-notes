@@ -1,3 +1,4 @@
+# 前言
 在现代 web 项目中，我们一般使用 XHR（XMLHttpRequest）或 fetch 发送 http 请求，以实现网页在不刷新的情况下获取数据（即实现 AJAX）。
 
 其中 XMLHttpRequest 拥有更好的兼容性，但它的缺点就是原生使用方式较为繁杂。
