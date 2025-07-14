@@ -1,7 +1,7 @@
 //微任务队列
-const microQueue = []
+const microQueue = [];
 // 宏任务队列
-const macroQueue = []
+const macroQueue = [];
 
 // 添加微任务
 const pushMicro = (fn) => microQueue.push(fn);
@@ -9,69 +9,46 @@ const pushMicro = (fn) => microQueue.push(fn);
 const pushMacro = (fn) => macroQueue.push(fn);
 
 // 主线程
-const run = () => {
-    console.log('a')
+const main = () => {
+  console.log("a");
+  pushMicro(() => {
+    console.log("b");
+    // 微任务中添加了新的微任务，也会在同一轮的事件循环中一起被清空
     pushMicro(() => {
-        console.log('b');
-        // 微任务中添加了新的微任务，也会在同一轮的事件循环中一起被清空
-        pushMicro(() => {
-            console.log('c')
-        })
-        pushMacro(() => {
-            console.log('d')
-        })
-    })
+      console.log("c");
+    });
     pushMacro(() => {
-        console.log('e');
-    })
-    console.log('f')
-}
+      console.log("d");
+    });
+  });
+  pushMacro(() => {
+    console.log("e");
+  });
+  console.log("f");
+};
 
-// 处理任务队列（宏任务 + 微任务）
-function handleQueue() {
-
+function worker(callback) {
+  // 处理任务队列（宏任务 + 微任务）
+  function handleQueue() {
     // 清空微任务队列
     while (microQueue.length) {
-        const fn = microQueue.shift()
-        fn()
+      const fn = microQueue.shift();
+      fn();
     }
 
     // 执行宏任务队列的第一个任务
     if (macroQueue.length) {
-        const fn = macroQueue.shift()
-        fn()
+      const fn = macroQueue.shift();
+      fn();
     }
 
     // 重新清空微任务队列，并执行一个宏任务
-    if (microQueue.length || macroQueue.length) handleQueue()
+    if (microQueue.length || macroQueue.length) handleQueue();
+  }
 
-};
+  callback();
+  handleQueue();
+}
 
-// 运行主线程
-run();
-setTimeout(() => {
-    // 模拟事件监听器或其他事件的回调中，添加了新的宏任务和微任务
-    console.log('0')
-    pushMicro(() => {
-        console.log('1');
-        // 微任务中添加了新的微任务，也会在同一轮的事件循环中一起被清空
-        pushMicro(() => {
-            console.log('2')
-        })
-        pushMacro(() => {
-            console.log('3')
-        })
-    })
-    pushMacro(() => {
-        console.log('4');
-    })
-    console.log('5')
-}, 2000)
-
-// 处理微任务队列
-handleQueue();
-
-
+worker(main);
 // 输出：a, f, b, c, e, d
-// =====2000毫秒后
-// 输出：0, 5, 1, 2, 4, 3
