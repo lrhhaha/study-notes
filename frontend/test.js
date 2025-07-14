@@ -27,28 +27,23 @@ const main = () => {
   console.log("f");
 };
 
-function worker(callback) {
-  // 处理任务队列（宏任务 + 微任务）
-  function handleQueue() {
-    // 清空微任务队列
-    while (microQueue.length) {
-      const fn = microQueue.shift();
-      fn();
-    }
-
-    // 执行宏任务队列的第一个任务
-    if (macroQueue.length) {
-      const fn = macroQueue.shift();
-      fn();
-    }
-
-    // 重新清空微任务队列，并执行一个宏任务
-    if (microQueue.length || macroQueue.length) handleQueue();
+// 处理任务队列（宏任务 + 微任务）
+function handleQueue() {
+  // 清空微任务队列
+  while (microQueue.length) {
+    const fn = microQueue.shift();
+    fn();
   }
 
-  callback();
-  handleQueue();
+  // 执行宏任务队列的第一个任务
+  if (macroQueue.length) {
+    const fn = macroQueue.shift();
+    fn();
+  }
+
+  // 重新清空微任务队列，并执行一个宏任务
+  if (microQueue.length || macroQueue.length) handleQueue();
 }
 
-worker(main);
-// 输出：a, f, b, c, e, d
+main(); // 输出：a, f, b, c, e, d
+handleQueue();
