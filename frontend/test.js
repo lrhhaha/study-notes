@@ -1,49 +1,41 @@
-//微任务队列
-const microQueue = [];
-// 宏任务队列
-const macroQueue = [];
 
-// 添加微任务
-const pushMicro = (fn) => microQueue.push(fn);
-// 添加宏任务
-const pushMacro = (fn) => macroQueue.push(fn);
 
-// 主线程
-const main = () => {
-  console.log("a");
-  pushMicro(() => {
-    console.log("b");
-    // 微任务中添加了新的微任务，也会在同一轮的事件循环中一起被清空
-    pushMicro(() => {
-      console.log("c");
-    });
-    pushMacro(() => {
-      console.log("d");
-    });
-  });
-  pushMacro(() => {
-    console.log("e");
-  });
-  console.log("f");
-};
 
-// 处理任务队列（宏任务 + 微任务）
-function handleQueue() {
-  // 清空微任务队列
-  while (microQueue.length) {
-    const fn = microQueue.shift();
-    fn();
-  }
 
-  // 执行宏任务队列的第一个任务
-  if (macroQueue.length) {
-    const fn = macroQueue.shift();
-    fn();
-  }
-
-  // 重新清空微任务队列，并执行一个宏任务
-  if (microQueue.length || macroQueue.length) handleQueue();
+const data = {
+  show: true
 }
 
-main(); // 输出：a, f, b, c, e, d
-handleQueue();
+const str = `
+<ul>
+  <% if (obj.show) { %>
+    <% for (var i = 0; i < obj.users.length; i++) { %>
+      <li>
+        <a href="<%= obj.users[i].url %>">
+          <%= obj.users[i].name %>
+        </a>
+      </li>
+    <% } %>
+  <% } else { %>
+    <p>不展示列表</p>
+  <% } %>
+</ul>
+`
+
+function tmpl(str, data) {
+
+    var fn = new Function("data",
+
+    "var p = []; p.push('" +
+
+    str
+    .replace(/[\r\t\n]/g, "")
+    .replace(/<%=(.*?)%>/g, "');p.push($1);p.push('")
+    .replace(/<%/g, "');")
+    .replace(/%>/g,"p.push('")
+    + "');return p.join('');");
+
+    return fn(data);
+};
+
+console.log(tmpl(str, data))
