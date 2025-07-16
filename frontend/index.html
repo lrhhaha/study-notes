@@ -1,4 +1,13 @@
-const data = {
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Document</title>
+</head>
+<body>
+  <script>
+    const data = {
   show: true,
   users: [
     {
@@ -37,7 +46,7 @@ function templateParse(str, data) {
   str = str.replace(/<%=(.*?)%>/g, "';html+=$1;html+='");
   // 所有 <% 替换为 ';
   str = str.replace(/<%/g, "';");
-  // 所有 %> 替换为 html+='
+  // 所有 %> 替换为 html+='z
   str = str.replace(/%>/g, "html+='");
   // 添加
   str += "';";
@@ -45,9 +54,13 @@ function templateParse(str, data) {
   str += "return html;";
   // console.log(str)
   const fn = new Function("data", str);
+  console.log(fn);
 
   return fn(data);
 }
 
 const html = templateParse(str, data);
 console.log(html);
+  </script>
+</body>
+</html>
