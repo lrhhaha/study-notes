@@ -1,20 +1,31 @@
+let dataList = null;
 
+const fileSelector = document.getElementById("file-selector");
+const workerBtn = document.getElementById("worker-btn");
 
-const fileSelector = document.getElementById('file-selector');
-fileSelector.addEventListener('change', (event) => {
-  // console.dir(event.target);
-    const file = event.target.files[0]
-  
-  const reader = new FileReader()
-  
+fileSelector.addEventListener("change", (event) => {
+  const file = event.target.files[0];
+
+  const reader = new FileReader();
   reader.onload = (e) => {
-    const content = e.target.result
+    const content = e.target.result;
+    const obj = JSON.parse(content);
+    dataList = obj?.nodes;
+  };
 
-    const data = JSON.parse(content)
+  reader.readAsText(file); // 读取为文本
+});
 
-    console.log(data)
-  }
-  
-  reader.readAsText(file) // 读取为文本
+
+workerBtn.addEventListener('click', () => {
+  useWebWorker()
 })
 
+function useWebWorker() {
+  let myWorker = new Worker("./worker.js");
+
+  myWorker.postMessage({
+    //   按 region 分组，计算出每一类 region 下 value 平均值、最大值、最小值、中位值、总和
+    data: dataList,
+  });
+}
