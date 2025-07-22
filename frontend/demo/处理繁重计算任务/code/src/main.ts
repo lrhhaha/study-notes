@@ -1,6 +1,7 @@
-import type { IData } from "./types";
+import type { INode, IEdge } from "./types";
 
-let dataList: Array<IData> | null = null;
+let nodeList: Array<INode> | null = null;
+let edgeList: Array<IEdge> | null = null;
 
 const fileSelector = document.getElementById("file-selector")!;
 const workerBtn = document.getElementById("worker-btn")!;
@@ -14,20 +15,23 @@ fileSelector.addEventListener("change", (event: Event) => {
   reader.onload = (e: ProgressEvent<FileReader>) => {
     const content = e.target?.result as string;
     const obj = JSON.parse(content);
-    dataList = obj?.nodes as Array<IData>;
+    console.log(obj);
+    nodeList = obj?.nodes as Array<INode>;
+    edgeList = obj?.edges as Array<IEdge>
+    // console.log(dataList);
   };
 
   reader.readAsText(file); // 读取为文本
 });
 
-workerBtn.addEventListener("click", () => {
-  useWebWorker();
-});
+// workerBtn.addEventListener("click", () => {
+//   useWebWorker();
+// });
 
-function useWebWorker() {
-  let myWorker = new Worker("./worker.js");
+// function useWebWorker() {
+//   let myWorker = new Worker("./worker.ts");
 
-  myWorker.postMessage({
-    data: dataList,
-  });
-}
+//   myWorker.postMessage({
+//     data: dataList,
+//   });
+// }
