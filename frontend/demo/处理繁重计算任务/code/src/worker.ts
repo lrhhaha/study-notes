@@ -1,11 +1,4 @@
-import type {
-  INode,
-  IResult1,
-  IResult3,
-  IEdge,
-  IResult4,
-  IResult2,
-} from "./types";
+import type { INode, IEdge } from "./types";
 import {
   handleNodeList,
   calcuFn1,
@@ -27,7 +20,6 @@ function handleMessage(nodeList: Array<INode>, edgeList: Array<IEdge>) {
   const time0 = performance.now();
   console.log("=================================");
   console.log(`分类：花费${time0 - time00}毫秒`, regionMap, resourceMap);
-
 
   // 任务一：按 region 分组，计算出每一类 region 下 value 平均值、最大值、最小值、中位值、总和
   const res1 = calcuFn1(regionMap);
@@ -51,5 +43,7 @@ function handleMessage(nodeList: Array<INode>, edgeList: Array<IEdge>) {
   const res4 = calcuFn4(nodeList, edgeList);
   const time6 = performance.now();
   console.log(`任务4：花费${time6 - time5}毫秒`, res4);
-}
 
+  console.log(`web worker纯计算总耗时${time6 - time1}毫秒`);
+  self.postMessage("web worker end");
+}

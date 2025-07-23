@@ -1,6 +1,8 @@
 import type { INode, IEdge } from "./types";
 import useIdleCallback from './idleCallback'
 
+let myWorker: Worker | null = null
+
 let nodeList: Array<INode> | null = null;
 let edgeList: Array<IEdge> | null = null;
 
@@ -27,7 +29,8 @@ fileSelector.addEventListener("change", (event: Event) => {
 
 // 使用web worker方式
 workerBtn.addEventListener("click", () => {
-  let myWorker = new Worker(new URL('./worker.ts', import.meta.url), {
+  const startTime = performance.now()
+  myWorker = new Worker(new URL('./worker.ts', import.meta.url), {
     type: 'module'
   });
 
@@ -35,7 +38,19 @@ workerBtn.addEventListener("click", () => {
     nodeList,
     edgeList
   });
+
+  myWorker.addEventListener('message', (event) => {
+    if (event.data === 'web worker end') {
+      const endTime = performance.now()
+      console.log(`web worker耗时${endTime - startTime}毫秒`)
+      myWorker && myWorker.terminate();
+      myWorker = null
+    }
+  })
 });
+
+
+
 
 // 使用requestIdleCallback方式
 idleBtn.addEventListener("click", () => {

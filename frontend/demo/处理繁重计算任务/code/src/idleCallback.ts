@@ -1,11 +1,4 @@
-import type {
-  INode,
-  IResult1,
-  IResult3,
-  IEdge,
-  IResult4,
-  IResult2,
-} from "./types";
+import type { INode, IEdge } from "./types";
 import {
   handleNodeList,
   calcuFn1,
