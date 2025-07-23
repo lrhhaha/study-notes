@@ -1,10 +1,12 @@
 import type { INode, IEdge } from "./types";
+import useIdleCallback from './idleCallback'
 
 let nodeList: Array<INode> | null = null;
 let edgeList: Array<IEdge> | null = null;
 
 const fileSelector = document.getElementById("file-selector")!;
 const workerBtn = document.getElementById("worker-btn")!;
+const idleBtn = document.getElementById("idle-btn")!;
 
 fileSelector.addEventListener("change", (event: Event) => {
   const target = event.target as HTMLInputElement;
@@ -24,11 +26,7 @@ fileSelector.addEventListener("change", (event: Event) => {
 });
 
 workerBtn.addEventListener("click", () => {
-  useWebWorker();
-});
-
-function useWebWorker() {
-  // 使用 Vite 的 ?worker 后缀来创建 Worker
+    // 使用 Vite 的 ?worker 后缀来创建 Worker
   let myWorker = new Worker(new URL('./worker.ts', import.meta.url), {
     type: 'module'
   });
@@ -37,4 +35,11 @@ function useWebWorker() {
     nodeList,
     edgeList
   });
-}
+});
+
+idleBtn.addEventListener("click", () => {
+  useIdleCallback(nodeList!, edgeList!);
+});
+
+
+
