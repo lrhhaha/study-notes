@@ -18,20 +18,23 @@ fileSelector.addEventListener("change", (event: Event) => {
     console.log(obj);
     nodeList = obj?.nodes as Array<INode>;
     edgeList = obj?.edges as Array<IEdge>
-    // console.log(dataList);
   };
 
   reader.readAsText(file); // 读取为文本
 });
 
-// workerBtn.addEventListener("click", () => {
-//   useWebWorker();
-// });
+workerBtn.addEventListener("click", () => {
+  useWebWorker();
+});
 
-// function useWebWorker() {
-//   let myWorker = new Worker("./worker.ts");
+function useWebWorker() {
+  // 使用 Vite 的 ?worker 后缀来创建 Worker
+  let myWorker = new Worker(new URL('./worker.ts', import.meta.url), {
+    type: 'module'
+  });
 
-//   myWorker.postMessage({
-//     data: dataList,
-//   });
-// }
+  myWorker.postMessage({
+    nodeList,
+    edgeList
+  });
+}
