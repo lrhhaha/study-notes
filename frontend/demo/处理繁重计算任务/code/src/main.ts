@@ -25,8 +25,8 @@ fileSelector.addEventListener("change", (event: Event) => {
   reader.readAsText(file); // 读取为文本
 });
 
+// 使用web worker方式
 workerBtn.addEventListener("click", () => {
-    // 使用 Vite 的 ?worker 后缀来创建 Worker
   let myWorker = new Worker(new URL('./worker.ts', import.meta.url), {
     type: 'module'
   });
@@ -37,6 +37,7 @@ workerBtn.addEventListener("click", () => {
   });
 });
 
+// 使用requestIdleCallback方式
 idleBtn.addEventListener("click", () => {
   useIdleCallback(nodeList!, edgeList!);
 });

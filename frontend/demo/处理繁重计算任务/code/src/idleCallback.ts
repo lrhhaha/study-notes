@@ -14,6 +14,7 @@ import {
   calcuFn4,
 } from "./utils";
 
+// 任务队列
 const queue: Function[] = [];
 
 function worker() {

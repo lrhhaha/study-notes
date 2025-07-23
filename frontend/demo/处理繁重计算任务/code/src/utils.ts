@@ -34,7 +34,7 @@ export function handleNodeList(data: Array<INode>) {
   };
 }
 
-// 按 region 分组，计算出每一类 region 下 value 平均值、最大值、最小值、中位值、总和
+// 任务一：按 region 分组，计算出每一类 region 下 value 平均值、最大值、最小值、中位值、总和
 export function calcuFn1(regionMap: Map<string, INode[]>) {
   const result: Array<IResult1> = [];
   const newRegionMap: Map<string, INode[]> = new Map();
@@ -69,7 +69,7 @@ export function calcuFn1(regionMap: Map<string, INode[]>) {
   return result;
 }
 
-//   按 region 分组，计算每一年， value 平均值、最大值、最小值、中位值、总和
+//  任务二： 按 region 分组，计算每一年， value 平均值、最大值、最小值、中位值、总和
 export function calcuFn2(regionMap: Map<string, INode[]>): IResult2[] {
   const result: IResult2[] = [];
 
@@ -126,7 +126,7 @@ export function calcuFn2(regionMap: Map<string, INode[]>): IResult2[] {
   return result
 }
 
-// 按 resource 分类，计算每一类 resource 下 value 平均值、最大值、最小值、中位值、总和
+// 任务三： 按 resource 分类，计算每一类 resource 下 value 平均值、最大值、最小值、中位值、总和
 export function calcuFn3(resourceMap: Map<string, INode[]>) {
   const result: Array<IResult3> = [];
   const newResourceMap: Map<string, INode[]> = new Map();
@@ -161,7 +161,7 @@ export function calcuFn3(resourceMap: Map<string, INode[]>) {
   return result;
 }
 
-// 找到整个数据集中，weight 最大值、最小值、中位值
+// 任务四：找到整个数据集中，weight 最大值、最小值、中位值
 export function calcuFn4(nodeList: Array<INode>, edgeList: Array<IEdge>): IResult4 {
   const valueList: number[] = [];
   let len: number = 0;
