@@ -16,7 +16,7 @@ function worker() {
     while (queue.length && idleDeadline.timeRemaining() >= 2) {
       const fn = queue.shift();
       fn!();
-      console.log("下一次够时间吗", idleDeadline.timeRemaining());
+      console.log("此帧剩余空闲时间：", idleDeadline.timeRemaining());
     }
 
     worker();

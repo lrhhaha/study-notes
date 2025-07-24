@@ -50,8 +50,6 @@ workerBtn.addEventListener("click", () => {
 });
 
 
-
-
 // 使用requestIdleCallback方式
 idleBtn.addEventListener("click", () => {
   useIdleCallback(nodeList!, edgeList!);
