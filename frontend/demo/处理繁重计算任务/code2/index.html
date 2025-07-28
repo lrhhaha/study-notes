@@ -1,183 +1,201 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>小球弹跳测试</title>
     <style>
-        body {
-            margin: 0;
-            padding: 20px;
-            background: #f0f0f0;
-            font-family: Arial, sans-serif;
-        }
+      body {
+        margin: 0;
+        padding: 20px;
+        background: #f0f0f0;
+        font-family: Arial, sans-serif;
+      }
 
-        .container {
-            max-width: 800px;
-            margin: 0 auto;
-            text-align: center;
-        }
+      .container {
+        max-width: 800px;
+        margin: 0 auto;
+        text-align: center;
+      }
 
-        h1 {
-            color: #333;
-            margin-bottom: 20px;
-        }
+      h1 {
+        color: #333;
+        margin-bottom: 20px;
+      }
 
-        .ball {
-            width: 30px;
-            height: 30px;
-            background: #ff6b6b;
-            border-radius: 50%;
-            position: absolute;
-            /* 使用JavaScript动画替代CSS动画，更容易被阻塞 */
-            /* animation: bounce 2s infinite; */
-        }
+      .ball {
+        width: 30px;
+        height: 30px;
+        background: #ff6b6b;
+        border-radius: 50%;
+        position: absolute;
+        /* 使用JavaScript动画替代CSS动画，更容易被阻塞 */
+        /* animation: bounce 2s infinite; */
+      }
 
-        @keyframes bounce {
-            0%, 100% {
-                transform: translateY(0);
-            }
-            50% {
-                transform: translateY(-100px);
-            }
+      @keyframes bounce {
+        0%,
+        100% {
+          transform: translateY(0);
         }
+        50% {
+          transform: translateY(-100px);
+        }
+      }
 
-        .controls {
-            margin: 20px 0;
-        }
+      .controls {
+        margin: 20px 0;
+      }
 
-        button {
-            background: #4CAF50;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            margin: 5px;
-            border-radius: 5px;
-            cursor: pointer;
-        }
+      button {
+        background: #4caf50;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        margin: 5px;
+        border-radius: 5px;
+        cursor: pointer;
+      }
 
-        button:hover {
-            background: #45a049;
-        }
+      button:hover {
+        background: #45a049;
+      }
 
-        .blocking-controls {
-            margin: 20px 0;
-            padding: 15px;
-            background: #fff3cd;
-            border: 1px solid #ffeaa7;
-            border-radius: 5px;
-        }
+      .blocking-controls {
+        margin: 20px 0;
+        padding: 15px;
+        background: #fff3cd;
+        border: 1px solid #ffeaa7;
+        border-radius: 5px;
+      }
 
-        .blocking-controls h3 {
-            color: #856404;
-            margin-top: 0;
-        }
+      .blocking-controls h3 {
+        color: #856404;
+        margin-top: 0;
+      }
 
-        .blocking-controls button {
-            background: #dc3545;
-            margin: 3px;
-            padding: 8px 15px;
-            font-size: 14px;
-        }
+      .blocking-controls button {
+        background: #dc3545;
+        margin: 3px;
+        padding: 8px 15px;
+        font-size: 14px;
+      }
 
-        .blocking-controls button:hover {
-            background: #c82333;
-        }
+      .blocking-controls button:hover {
+        background: #c82333;
+      }
 
-        .info {
-            background: white;
-            padding: 15px;
-            border-radius: 5px;
-            margin: 20px 0;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        }
+      .info {
+        background: white;
+        padding: 15px;
+        border-radius: 5px;
+        margin: 20px 0;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+      }
 
-        .warning {
-            background: #f8d7da;
-            color: #721c24;
-            padding: 10px;
-            border-radius: 5px;
-            margin: 10px 0;
-            border: 1px solid #f5c6cb;
-        }
+      .warning {
+        background: #f8d7da;
+        color: #721c24;
+        padding: 10px;
+        border-radius: 5px;
+        margin: 10px 0;
+        border: 1px solid #f5c6cb;
+      }
 
-        .performance-info {
-            background: #d1ecf1;
-            color: #0c5460;
-            padding: 10px;
-            border-radius: 5px;
-            margin: 10px 0;
-            border: 1px solid #bee5eb;
-        }
+      .performance-info {
+        background: #d1ecf1;
+        color: #0c5460;
+        padding: 10px;
+        border-radius: 5px;
+        margin: 10px 0;
+        border: 1px solid #bee5eb;
+      }
     </style>
-</head>
-<body>
+  </head>
+  <body>
     <div class="container">
-        <h1>小球弹跳测试 - 阻塞渲染演示</h1>
+      <h1>小球弹跳测试 - 阻塞渲染演示</h1>
 
-        <div class="blocking-controls">
-            <h3>🚨 阻塞测试按钮</h3>
-            <button onclick="heavyCalculation()">直接执行大量计算</button>
-            <button onclick="useWebWorker()">使用webWorker</button>
-            <button onclick="useIdleCallback()">使用requestIdleCallback</button>
-        </div>
+      <div class="blocking-controls">
+        <h3>🚨 阻塞测试按钮</h3>
+        <button onclick="heavyCalculation()">直接执行大量计算</button>
+        <button onclick="useWebWorker()">使用webWorker</button>
+        <button onclick="useIdleCallback()">使用requestIdleCallback</button>
+      </div>
 
-        <div class="info">
-            <p>观察小球动画是否流畅，如果卡顿说明主线程被阻塞</p>
-            <p>动画帧率: <span id="fps">60</span> FPS</p>
-        </div>
+      <div class="info">
+        <p>观察小球动画是否流畅，如果卡顿说明主线程被阻塞</p>
+        <p>动画帧率: <span id="fps">60</span> FPS</p>
+      </div>
     </div>
 
     <script src="heavyCalc.js"></script>
-    <script src="webWorker.js"></script>
+    <script src="idleCallback.js"></script>
     <script>
-        const ballCountElement = document.getElementById('ballCount');
-        const fpsElement = document.getElementById('fps');
-        let balls = [];
-        let animationId;
-        let lastTime = 0;
-        let frameCount = 0;
-        let fps = 60;
+      let worker = null;
+      function useWebWorker() {
+        worker = new Worker("./webWorker.js");
+        worker.postMessage("start");
 
-        // 使用JavaScript实现小球动画，更容易被阻塞
-        function animateBalls(currentTime) {
-            frameCount++;
-            
-            // 计算FPS
-            if (currentTime - lastTime >= 1000) {
-                fps = Math.round((frameCount * 1000) / (currentTime - lastTime));
-                fpsElement.textContent = fps;
-                frameCount = 0;
-                lastTime = currentTime;
-            }
+        // 监听工作线程回传信息
+        worker.addEventListener("message", (event) => {
+          console.log('工作线程回传信息：', event.data);
 
-            // 更新每个小球的位置
-            balls.forEach((ball, index) => {
-                const time = currentTime * 0.001; // 转换为秒
-                const y = Math.sin(time * 2 + index) * 50; // 弹跳效果
-                ball.style.transform = `translateY(${y}px)`;
-            });
-
-            animationId = requestAnimationFrame(animateBalls);
-        }
-
-        // 启动动画
-        requestAnimationFrame(animateBalls);
-
-        function addBall() {
-            const ball = document.createElement('div');
-            ball.className = 'ball';
-            ball.style.left = Math.random() * (window.innerWidth - 30) + 'px';
-            ball.style.top = Math.random() * (window.innerHeight - 130) + 100 + 'px';
-            document.body.appendChild(ball);
-            
-            balls.push(ball);
-        }
-
-        // 初始添加五个小球
-        for (let i = 0; i < 5; i++) {
-            addBall();
-        }
+          // 清理工作线程
+          worker && worker.terminate();
+          worker = null
+        });
+      }
     </script>
-</body>
+    <script>
+      const ballCountElement = document.getElementById("ballCount");
+      const fpsElement = document.getElementById("fps");
+      let balls = [];
+      let animationId;
+      let lastTime = 0;
+      let frameCount = 0;
+      let fps = 60;
+
+      // 使用JavaScript实现小球动画，更容易被阻塞
+      function animateBalls(currentTime) {
+        frameCount++;
+
+        // 计算FPS
+        if (currentTime - lastTime >= 1000) {
+          fps = Math.round((frameCount * 1000) / (currentTime - lastTime));
+          fpsElement.textContent = fps;
+          frameCount = 0;
+          lastTime = currentTime;
+        }
+
+        // 更新每个小球的位置
+        balls.forEach((ball, index) => {
+          const time = currentTime * 0.001; // 转换为秒
+          const y = Math.sin(time * 2 + index) * 50; // 弹跳效果
+          ball.style.transform = `translateY(${y}px)`;
+        });
+
+        animationId = requestAnimationFrame(animateBalls);
+      }
+
+      // 启动动画
+      requestAnimationFrame(animateBalls);
+
+      function addBall() {
+        const ball = document.createElement("div");
+        ball.className = "ball";
+        ball.style.left = Math.random() * (window.innerWidth - 30) + "px";
+        ball.style.top =
+          Math.random() * (window.innerHeight - 130) + 100 + "px";
+        document.body.appendChild(ball);
+
+        balls.push(ball);
+      }
+
+      // 初始添加五个小球
+      for (let i = 0; i < 5; i++) {
+        addBall();
+      }
+    </script>
+  </body>
 </html>
