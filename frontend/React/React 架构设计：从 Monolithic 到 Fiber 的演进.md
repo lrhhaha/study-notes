@@ -1,6 +1,6 @@
-# React 架构设计：从 Monolithic 到 Fiber 的演进
+# 题目： React 架构设计：从 Monolithic 到 Fiber 的演进
 
-## 前言
+# 前言
 
 本文后续遵循以下约定：
 
@@ -10,17 +10,23 @@
 4. render 阶段的核心称为 Reconciler（协调器）
 5. commit 阶段的核心称为 Renderer（渲染器）
 
-## stack reconciler 与 fiber reconciler 的前世今生
+# stack reconciler 与 fiber reconciler 的前世今生
 
 在 React16 之前，当应用状态发生改变，宏观上会执行以下两部分的工作，以更新 UI：
 
 1. Reconciler（协调器）会生成新的虚拟 DOM，并与旧的虚拟 DOM 进行对比，找出需要更新的部分。
 2. Renderer（渲染器）根据 Reconciler 计算的结果，将需要更新的部分提交到真实 DOM 上。
 
-Reconciler 的整个工作过程（从生成虚拟 DOM 到计算得出更新部分）是一个`不可中断的递归`过程（即 stack reconciler），而 JS 作为单线程语言，在此过程中不能处理其他任务（如响应用户的输入操作等）。这就造成了应用交互卡顿的风险。
+Reconciler 在处理组件树的更新时，采用的是递归的方式，是一个`不可中断`的过程（即 stack reconciler），而 JS 作为单线程语言，在此过程中不能处理其他任务（如响应用户的输入操作等）。这就造成了应用交互卡顿的风险，且在递归的过程中，需要创建大量的调用栈，这在处理大型组件树的时候可能会导致栈溢出。
 
 举个🌰：
 当应用触发了状态变更，需要更新UI，假设本次更新非常复杂，需要耗费100ms，那么在这100ms内，如果用户进行了其他操作，如在输入框中输入本文。按照React16之前的渲染逻辑，Reconciler的工作过程不可中断，必须等待前一个渲染任务完成后，才能进行后续的输入框内容的变更。这就导致了应用卡顿的情况。
+
+总结一下，React16之前的Reconciler存在的问题：
+1. 采用递归方式处理组件树，可能会导致调用栈的溢出。
+2. 递归处理组件树的整个过程是不可中断的，这会阻塞用户的交互或其他重要的任务。
+3. 更新任务没有优先级的概念，无法区分重要任务（如用户输入后的页面渲染）与普通任务（如数据请求后的页面渲染），无法调度它们的执行顺序，普通任务可能会阻塞重要任务的执行。
+
 
 为此 React 团队计划在 React16 中重构 Reconciler 的逻辑，以实现应用在 Reconciler 工作时能`中断任务并优先处理优化级较高的任务`如用户交互操作。并将这个新的方式称为 Fiber Reconciler。（而 Renderer 的工作逻辑不变，其执行过程仍然是不可中断的）。
 
@@ -32,18 +38,21 @@ Reconciler 的整个工作过程（从生成虚拟 DOM 到计算得出更新部�
 为了实现 render 阶段可中断，fiber 架构做出了如下重大改变：
 
 1. 将 stack reconciler 中一整个渲染任务拆分为多个任务（即多个fiber节点，每个节点可代表一个工作单元）。
-2. 重构了虚拟 DOM，以 fiber 树作为虚拟 DOM 的载体。
-3. 对虚拟 DOM 树进行重构，从普通树状结构重构为链式树状结构。
+
+2. 实现渲染任务的可中断与可恢复，在执行某个渲染任务时，如何应用触发了优先级更高的任务，则可暂停当前任务，优先处理高优先级任务，然后回来恢复之前的任务。
+
+3. 引入优先级调度系统，不同类型的更新任务有不同优先级，调度系统自动决定任务执行的先后顺序。
 
 
-### fiber节点 与 fiber 树
+## Fiber架构 fiber节点 与 fiber 树
 Fiber 包含三层含义：
 
-1. 作为数据结构来说，一个 fiber 节点对应一个 React 元素（React 组件、原生标签等），保存了该元素的所有信息，作为虚拟 DOM 的节点使用。而 fiber 节点组成的树状结构就是 Fiber 架构下虚拟 DOM 的实现方式。
+1. 作为数据结构来说，一个 fiber 节点对应一个 React 元素（React 组件、原生标签等），保存了该元素的所有信息，作为虚拟 DOM 的节点使用。而 fiber 节点组成的`链式树状结构`就是 Fiber 架构下虚拟 DOM 的实现方式。
 
 2. 作为架构来说，Reconciler 的生成虚拟 DOM 的过程是基于 fiber 节点实现的可中断遍历，此过程可称为 Fiber Reconciler。
 
 3. 作为工作单元来说，一个Fiber节点代表一个工作单元，保存了本次更新中该组件改变的状态、要执行的工作（需要被删除/被插入页面中/被更新...）。
+
 
 为了实现不可中断的递归更新重构为可中断的遍历更新，之前所使用的虚拟 DOM 树的元素数据结构已无法满足需求（因普通树状结构无法不依靠外界而实现递归中断后的状态记录），需要fiber节点提供相关属性以支持链式树状结构的搭建。
 
@@ -78,32 +87,50 @@ fiber节点与结构相关的属性有如下三个：
 
 但这仅仅提供了结构上的支持，还需一个“调度者”去控制渲染任务何时、如何中断并恢复。
 
-## fiber 节点属性介绍
+# fiber 节点属性介绍
 接下来介绍fiber节点所具有的属性，及其作用。
 
-### 标识和类型属性
+## 标识和类型属性
 
-- key：React元素的key属性，用于优化列表对比过程
-- tag：即当前元素的`WorkTag`类型（用数字飙屎节点类型）
-- elementType：创建Fiber时传入的“原始”组件类型
-- type：实际用于渲染的组件的类型
+### key
+React元素的key属性，用于优化列表对比过程
+
+
+### tag
+属性标识了Fiber节点的类型，这个标记不仅用于区分不同类型的节点，更重要的是指导React如何处理这个节点。不同类型的节点有不同的处理逻辑和生命周期。
+
+```typeScript
+// tag属性为WorkTag类型
+export type WorkTag = 0 | 1 | 2 | 3 |......
+
+// FunctionComponent: 0,        // 函数组件
+// ClassComponent: 1,           // 类组件
+// IndeterminateComponent: 2,   // 未确定类型的组件
+// HostRoot: 3,                 // 根节点
+// ......
+```
+
+
+### elementType & type
+elementType：创建Fiber时传入的“原始”组件类型
+type：实际用于渲染的组件的类型
 
 其中elementType和type属性比较容易混淆，列举如下三个例子帮助理解：
-1）对于原生元素而言，两者相同，就是标签名称
+（1）对于原生元素而言，两者相同，就是标签名称
 ```
 <div>Hello</div>
 // elementType → 'div'
 // type → 'div'
 ```
 
-2）对于普通组件而言，两者相同，指向组件本身
+（2）对于普通组件而言，两者相同，指向组件本身
 ```
 function MyComponent() { return <div>Hello</div>; }
 // elementType → MyComponent（函数）
 // type → MyComponent（函数）
 ```
 
-3）对于高阶组件返回的组件而言，两者有明显区别\
+（3）对于高阶组件返回的组件而言，两者有明显区别\
 可理解为 type 是解包之后的组件（elementType.type === type）
 ```
 const Comp = React.memo(MyComponent);
@@ -111,28 +138,28 @@ const Comp = React.memo(MyComponent);
 // type → MyComponent（函数本身）
 ```
 
-### 树状结构相关属性
+## 树状结构相关属性
 
 Fiber 节点通过以下三个属性形成链式树状结构：
 - return：指向父 Fiber 节点
 - child：指向第一个子 Fiber 节点
 - sibling：指向下一个兄弟 Fiber 节点
 
-### 状态相关属性
-1）memoizedProps
+## 状态相关属性
+### memoizedProps
 上一次渲染时使用的 props
 
-2）memoizedState: 
+### memoizedState: 
 上一次渲染时使用的 state
 
-3）pendingProps: 
+### pendingProps: 
 新的待处理的 props
  
-4）updateQueue: 
+### updateQueue: 
 存储更新对象的队列
 
-### 副作用相关属性
-1）flags
+## 副作用相关属性
+### flags
 标记该 Fiber 节点在 commit 阶段需要执行的副作用（如插入、更新、删除等），可能存在多个副作用。
 
 在React中，使用二进制数字代表不同的副作用，并使用`与运算`的结果记录所有副作用。
@@ -157,7 +184,7 @@ fiber.flags = Update | ChildDeletion;
 // 0b0000000000000000000000000000100 | 0b0000000000000000000000000010000 = 0b0000000000000000000000000010100
 ```
 
-2）subtreeFlags
+### subtreeFlags
 子树中的副作用标记
 记录子孙节点中是否有副作用，如有，则当前节点的subtreeFlags就不为0。
 
@@ -170,16 +197,20 @@ fiber.flags = Update | ChildDeletion;
 但 commit 阶段仍需要找到它们并执行清理操作（如从 DOM 移除、执行生命周期钩子 /hooks）。
 所以需要使用 deletions 属性保存这些节点。
 
-### 双缓冲机制相关属性
-1）alternate
-指向另一个树中对应的 Fiber 节点，
-让 react 在 current fiber tree 和 work in progress fiber tree 中来回切换，实现任务中断和恢复。
+## 双缓冲机制相关属性
+### alternate
+指向另一个树中对应的 Fiber 节点
+即current fiber tree 和 workInProgress fiber tree的互相引用，实现fiber tree的快速切换。
+
+> current fiber tree：当前页面所对应的虚拟DOM树\
+> workInprogress fiber tree：下次要渲染的页面所对应的虚拟DOM树
+
 ```
 fiber.alternate.alternate === fiber // true
 ```
 
-### 优先级相关属性
-1）lanes
+## 优先级相关属性
+### lanes
 表示该fiber任务的优先级。
 此属性的值和flags一样，也是二进制数字
 ```
@@ -190,12 +221,21 @@ export const InputContinuousHydrationLane = /*   */ 0b00000000000000000000000000
 export const InputContinuousLane = /*            */ 0b0000000000000000000000000001000;
 ```
 
-2）childLanes
+### childLanes
 记录了当前Fiber节点的子树中存在的所有更新优先级（lanes）
 在协调阶段，React会通过检查childLanes属性来判断子树中是否有更新，如果没有更新，则跳过子树的遍历。
 
-## 从状态更新到页面渲染
-接下来我们从宏观角度分析当某个组件的状态发生变化时，React是如何对UI进行更新的。
+# 从状态更新到页面渲染
+接下来我们从宏观角度分解当某个组件的状态发生变化时，React是如何对UI进行更新的。
 
 ![react状态更新到页面渲染](../assets/images/react状态更新到页面渲染.png)
 
+对于Fiber架构而言，重点在于render阶段（或称Reconciliation阶段），此阶段的重点在于workInProgress Fiber tree的创建过程，以及协调算法如何优化此过程。
+
+在下一篇文章中，我们将重点讨论此阶段的逻辑。
+
+# 总结
+本文介绍了
+1. React从stack reconciler 到 fiber reconciler转变的历程
+2. Fiber节点的重点属性
+3. 基于fiber节点的链式树状结构
