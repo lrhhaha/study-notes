@@ -4,13 +4,13 @@
 
 # 一、双缓存架构介绍
 
-React 维护了两棵 Fiber 树（即虚拟 DOM 树）：`current`树和`workInProgress`树。`current`树代表当前屏幕上显示的内容，`workInProgress`树代表正在构建的新内容。基于这两颗 fiber 树的页面渲染架构就称为双缓存架构。
+React 维护了两棵 Fiber 树（即虚拟 DOM 树）：`current`树和`workInProgress`树。`current`树代表当前屏幕上显示的内容，`workInProgress`树代表下次更新需要展示的内容。基于这两颗 fiber 树的页面渲染架构就称为双缓存架构。
 
 之所以需要使用两颗 fiber 树去辅助页面更新，是因为:
 
 > 如果我们没有 workInProgress 树去记录下次页面更新时，需要执行哪些增删改的操作，那么就只可以将页面清空，然后执行新增操作，将整个页面元素重新生成，那么此过程不仅影响应用性能，还可能因为绘制时间过长，造成白屏的情况。
 >
-> 而基于双缓存树架构，我们可以使用当前页面的信息（即 current fiber tree）与下次更新后的页面信息（即 JSX 元素编译后的 React 元素）进行对比，从而生成 workInProgress fiber tree，它记录了基于当前页面，有哪些元素需要执行增删改的操作，力求通过复用旧元素，以最小代价更新页面。
+> 而基于双缓存树架构，我们可以使用当前页面的结构信息（即 current fiber tree）与下次更新后的页面结构信息（即 JSX 元素编译后的 React 元素）进行对比，从而生成 workInProgress fiber tree，它记录了基于当前页面，有哪些元素需要执行增删改的操作，力求通过复用旧元素，以最小代价更新页面。
 
 # 二、生成 workInProgress 树的过程
 
@@ -18,7 +18,7 @@ render/Reconciliation 阶段的主要任务：高效对比 current 树与新的 
 
 而如何高效对比 current 树与新的 React 元素，使用的就是所谓的 diff 算法。
 
-> Diff 算法的输入： current Fiber 节点 + 新的 React 元素（JSX 编译后的 React 元素）
+> Diff 算法的输入： current Fiber 节点 + 新的 React 元素\
 > Diff 算法的输出：workInProgress 树（记录下次页面更新需要基于当前 DOM 结构执行哪些操作）
 
 简而言之：在开始协调生成 workInProgress 树的时候，workInProgress 会复制得到 current 树的副本，然后 current 树和新的 React 元素进行 diff 对比，在此过程中对 workInProgress 树进行标记（记录对应节点需要执行的操作）。
@@ -40,32 +40,21 @@ render/Reconciliation 阶段的主要任务：高效对比 current 树与新的 
 
 ## 组件复用判断条件
 
-为了降低算法复杂度，React 会预设三个限制:
+为了降低算法复杂度，React 会预设三个限制来辅助判断组件是否能复用:
 
 1. 同层对比：只在同一层级的节点之间进行 diff 对比。
-2. 类型不同的元素产生不同的树：如元素从 `<div>`变为 `<p>`，因为类型改变，默认不能复用旧 DOM 节点，直接删除旧 `<div>`节点及其子孙节点，并新建 `<p>`节点及其子孙节点。
-3. 使用 key 属性作为元素的 `唯一标识`：key 值相同的两个节点会被视为同一个节点而进行精确匹配对比。
+2. 使用 key 属性作为元素的 `唯一标识`：key 值相同的两个节点会被视为同一个节点而进行精确匹配对比。
+3. 类型不同的元素产生不同的树：如元素从 `<div>`变为 `<p>`，因为类型改变，默认不能复用旧 DOM 节点，直接删除旧 `<div>`节点及其子孙节点，并新建 `<p>`节点及其子孙节点。
 
 > 在列表渲染的情况下，React 会提示必须为每一项设置 key 作为唯一标识，以便在重新渲染时能精确匹配进行对比。
 >
 > 而在非列表渲染的情况下，React 则没有要求必须为元素设置 key 值。但在必要的情况下，也可以使用 key 值作为优化手段。（在没有设置 key 值的时候，key 的默认值为 null。）
 
-```tsx
-<div>
-  {isSwapped ? (
-    <>
-      <h3 key="aa">this is title</h3>
-      <p key="bb">this is content</p>
-    </>
-  ) : (
-    <>
-      <p key="bb">this is content</p>
-      <h3 key="aa">this is title</h3>
-    </>
-  )}
-  <button onClick={() => setIsSwapped(!isSwapped)}>切换顺序</button>
-</div>
-```
+则组件复用的判断逻辑如下：
+
+1. 只对同级组件进行判断
+2. 优先判断 key 值是否相等
+3. key 值相等的情况下，组件类型 type 也相等，则组件可复用。
 
 ## diff 入口
 
@@ -73,7 +62,7 @@ diff 的入口函数是 reconcileChildFibers。
 
 其中需要关注的参数为：
 
-- currentFirstChild：current 树中将要进行对比的子节点（们）的第一个子节点（其余通过其 sibling 节点访问）
+- currentFirstChild：current 树中将要进行对比的子节点的第一个子节点（其余子节点通过其 sibling 节点链接）
 - newChild：新渲染的 React 元素的子节点（们）
 
 因为对于不同类型的 newChild 会有不同的处理函数，所以需要先判断其类型，常见类型为 Object 和 Array（分别代表单个子节点和多个子节点），还有如 number 和 string 等（本文暂不讨论）。
@@ -85,14 +74,14 @@ function reconcileChildFibers(
   newChild: any, // 将要渲染的children节点
   lanes: Lanes
 ) {
-  // 如下为伪代码：
-
+  // 伪代码：判断newChild是否为单个节点
   if (isObject(newChild)) {
-    reconcileSingleElement();
+    reconcileSingleElement(todo);
   }
 
+  // 伪代码：判断newChild是否为多个节点
   if (isArray(newChild)) {
-    reconcileChildrenArray();
+    reconcileChildrenArray(todo);
   }
 
   // 省略其他情况
@@ -103,31 +92,35 @@ function reconcileChildFibers(
 
 ## 单节点 diff
 
-当 newChild 为单节点的时候，
+当 newChild 为单节点的时候，只会执行一轮遍历操作：
 
-1. 展示宏观过程
-2. 展示如果判断节点是否可以复用
+> 优先对比 key 值（无显式设置则默认为 null）。\
+> key 值匹配成功，则证明此旧节点就是目标节点。\
+> 再对比元素类型，类型相等则可复用旧节点。如元素类型不相等，则证明旧节点不能复用，直接标记删除所有旧节点。\
+> 如 key 值匹配不成功，则标记此旧节点需要删除（而不删除它的兄弟节点，因为其他兄弟节点的 key 值可能会匹配成功），继续使用下一个兄弟节点进行对比，直至对比完所有旧节点。
 
-有 key 值，则优先对比 key 值。
-key 值匹配成功，则证明此旧节点就是目标节点。
-再对比元素类型，类型相等则可复用旧点解。如元素类型不相等，则证明旧节点不能复用，直接标记删除所有旧节点。
-如 key 值匹配不成功，则标记此旧节点需要删除（而不删除它的兄弟节点，因为其他兄弟节点的 key 值可能会匹配成功），继续使用下一个兄弟节点进行对比，直至对比完所有旧节点。
-
+具体流程图如下所示：
 ![单节点diff历程](../assets/images/react单节点diff流程.png)
 
 ## 多节点 diff
 
-当 newChild 为多节点的时候，则需要使用新的对比逻辑，分为两轮遍历。
+当 newChild 为多节点的时候（后续使用 newChildren 表示），则需要使用新的对比逻辑，分为两轮遍历。
 
 ### 第一轮遍历
 
+- 遍历 newChildren，将 newChildren[i]与 oldFiber 比较，判断两者 key 值是否相等。
+
+  - 如 key 值相同，则继续判断 type 是否相同，相同则可复用旧节点，否则将 oldFiber 标记为需要被删除，并标记为 newChildren[i]创建新节点使用。继续进行遍历对比 newChildren[++i]与 oldFiber.sibling。
+
+  - 如 key 值不相同，则立即跳出整个遍历，第一轮遍历结束。
+
+即第一轮遍历的的结束条件有两个：
+
+1. 遍历时出现 key 值不匹配的情况。
+2. newChildren 数组遍历完`或者`oldFiber 遍历完(即 oldFiber.sibling === null)。
+
 具体流程如下图所示：
 ![多节点diff第一轮流程](../assets/images/react多节点diff第一轮流程.png)
-
-第一轮遍历的的结束条件有两个：
-
-1. 遍历时出现 key 值不匹配的情况
-2. newChildren 数组遍历完`或者`oldFiber 遍历完(即 oldFiber.sibling === null)
 
 第一轮遍历结束，即进行第二轮遍历流程
 
@@ -136,46 +129,43 @@ key 值匹配成功，则证明此旧节点就是目标节点。
 #### 四种情况
 
 进入第二轮遍历时，会有如下四种情况：
-1、newChildren 和 oldFiber 同时遍历完。
+
+1、newChildren 和 oldFiber 同时遍历完：
 新旧节点都遍历完，无需进行第二轮遍历，diff 结束。
 
-2、newChildren 未遍历完，oldFiber 遍历完。
+2、newChildren 未遍历完，oldFiber 遍历完：
 此时因为 oldFiber 都已遍历完，证明所有旧 DOM 节点都已复用，剩下的 newChildren 都需要创建新的 fiber 节点来使用，diff 结束。
 
-3、newChildren 遍历完，oldFiber 未遍历完。
+3、newChildren 遍历完，oldFiber 未遍历完：
 此时意味着所有新的节点都已找到对应的旧 DOM 节点进行服用，而剩余的 oldFiber 节点则无需再使用，标记为需要被删除，diff 结束。
 
-4、newChildren 和 oldFiber 都没遍历完
+4、newChildren 和 oldFiber 都没遍历完：
 此时意味着有节点在此次更新中更换了位置，需要进行第二轮遍历以找出可以复用的节点。
 
 #### 正式流程
 
 在正式开始前，我们需要把 oldFiber 中剩余的节点放到一个 Map 中，形成形如`{key: fiber}`的形式。以便后续在遍历剩余 newChildren 时，能直接通过 key 值定位到对应的 oldFiber。
 
-接下来有一个变量`lastPlacedIndex`，它`记录了上一个不需要移动的节点的原始下标`。
+接下来有一个变量`lastPlacedIndex`，它`记录了上一个不需要移动的节点的原始下标`。第二轮遍历开始时，它的值为 0。
 
-第二轮遍历开始时，它的值为 0。
+1. 遍历 newChildren，寻找当前新节点 newChildren[i]的 key 值是否存在于 Map 中。
 
-遍历 newChildren，寻找当前新节点 newChildren[i]的 key 值是否存在于 Map 中。
+   1. 如果 Map 中没有此 key 值，则证明没有能复用的旧节点，为此节点标记需要创建新节点。
 
-如果 Map 中没有此 key 值，则证明没有能复用的旧节点，为此节点标记需要创建新节点。
+   2. 如果在 Map 中找到此 key 值对应的 oldFiber（假设 type 也相同），则使用此 oldFiber 在原列表中的下标（使用 oldIndex 表示）与 lastPlacedIndex 进行对比。
 
-如果在 Map 中找到此 key 值对应的 oldFiber，则使用此 oldFiber 在原列表中的下标（使用 oldIndex 表示）与 lastPlacedIndex 进行对比。
+      1. 如果 oldIndex >= lastPlacedIndex，则证明此 oldFiber 原本就在 lastPlacedIndex 的后面，无需移动。且将 lastPlacedIndex 赋值为 oldIndex。
 
-如果 oldIndex >= lastPlacedIndex，则证明此 oldFiber 原本就在 lastPlacedIndex 的后面，无需移动。且将 lastPlacedIndex 赋值为 oldIndex。
+      2. 如果 oldIndex < lastPlacedIndex，则证明 oldFiber 原本在 lastPlacedIndex 的前面（而在新页面中，它应在 lastPlacedIndex 的后面），需要标记 oldFiber 为需要向右移动。
 
-如果 oldIndex < lastPlacedIndex，则证明 oldFiber 原本在 lastPlacedIndex 的前面（而在新页面中，它应在 lastPlacedIndex 的后面），需要标记 oldFiber 为需要向右移动。
-
-然后 i++，继续执行上述循环，直至 newChildren 遍历完毕（如遍历完毕后，还有剩余 oldFiber，则将它们标记为需要被删除）。
+2. 然后 i++，继续执行上述循环，直至 newChildren 遍历完毕（如遍历完毕后，还有剩余 oldFiber，则将它们标记为需要被删除）。
 
 流程图如下所示：
 ![多节点diff第二轮遍历](../assets/images/react多节点diff第二轮遍历.png)
 
-### 例子
+## 例子
 
 上述文字描述可能比较晦涩，接下来将使用一个例子进行介绍
-
-现假设下次页面更新时，只是顺序发生了改变
 
 使用节点的 key 值来代表节点：
 
@@ -201,6 +191,7 @@ key 值匹配成功，则证明此旧节点就是目标节点。
 > -------第二个迭代结束---------
 >
 > ========第一轮遍历结束============
+
 > newChildren === dbc，没用完，不需要执行删除旧节点\
 > oldFiber === bcde，没用完，不需要执行插入新节点
 >
@@ -230,7 +221,7 @@ key 值匹配成功，则证明此旧节点就是目标节点。
 >
 > 查找 key 值是否存在：b in map // true
 >
-> > map 中存在目标 key 值，且假设 type 相同，则旧节点可以复用。
+> map 中存在目标 key 值，且假设 type 相同，则旧节点可以复用。
 >
 > 判断旧节点是否需要移动\
 > 节点 b 在原队列中下标为 1（原队列为 abcde），lastPlacedIndex 为 3。\
@@ -253,9 +244,7 @@ key 值匹配成功，则证明此旧节点就是目标节点。
 > 此时 newChildren 已遍历完毕。oldFiber 中还有 e 节点未使用，标记为需要删除。
 >
 > ==========第二轮遍历结束，diff 结束===========
->
-> 从上述例子可以看出，我们将元素从 abcd 重新排序为 adbc，按道理来说，只需将 d 节点移动到第二位。
 
-而根据 react 的 diff 算法，会将 bc 节点往后移动，而 d 节点不变。
-
-由此可知，为了性能考虑，我们应该尽量减少将节点从后往前移动的操作。
+从上述例子可以看出，我们将元素从 abcde 重新排序为 adbc，按道理来说，只需删除 e 节点，并将 d 节点移动到第二位即可。\
+而根据 react 的 diff 算法，会将 bc 节点往后移动，而 d 节点不变。\
+由此可知，为了性能考虑，我们应该尽量减少将节点从后往前移动的操作。\
