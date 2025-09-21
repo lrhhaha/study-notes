@@ -42,7 +42,7 @@ render/Reconciliation 阶段的主要任务：高效对比 current 树与新的 
 
 # 三、diff 算法详解
 
-## 组件复用判断条件
+## Ⅰ、组件复用判断条件
 
 为了降低算法复杂度，React 会预设三个限制来辅助判断组件是否能复用:
 
@@ -60,7 +60,7 @@ render/Reconciliation 阶段的主要任务：高效对比 current 树与新的 
 2. 优先判断 key 值是否相等
 3. key 值相等的情况下，组件类型 type 也相等，则组件可复用。
 
-## diff 入口
+## Ⅱ、diff 入口
 
 diff 的入口函数是 reconcileChildFibers。
 
@@ -94,7 +94,7 @@ function reconcileChildFibers(
 
 接下来我们我讨论 newChild 为单节点和多节点的情况。
 
-## 单节点 diff
+## Ⅲ、单节点 diff
 
 当 newChild 为单节点的时候，只会执行一轮遍历操作：
 
@@ -106,7 +106,7 @@ function reconcileChildFibers(
 具体流程图如下所示：
 ![单节点diff历程](../assets/images/react单节点diff流程.png)
 
-## 多节点 diff
+## Ⅳ、多节点 diff
 
 当 newChild 为多节点的时候（后续使用 newChildren 表示），则需要使用新的对比逻辑，分为两轮遍历。
 
@@ -167,7 +167,7 @@ function reconcileChildFibers(
 流程图如下所示：
 ![多节点diff第二轮遍历](../assets/images/react多节点diff第二轮遍历.png)
 
-## 例子
+## Ⅴ、例子
 
 上述文字描述可能比较晦涩，接下来将使用一个例子进行介绍
 
@@ -255,6 +255,6 @@ function reconcileChildFibers(
 而根据 React 的 diff 算法，会将 bc 节点往后移动，而 d 节点不变。\
 由此可知，为了性能考虑，我们应该尽量减少将节点从后往前移动的操作。\
 
-# 总结
+# 四、总结
 
 本文主要讨论了双缓存架构对于页面更新的优化意义，以及 React 如何针对不同情况，使用不同的 diff 算法逻辑去进行新旧节点的对比，以便在更好地平衡对比性能与节点复用的关系。
