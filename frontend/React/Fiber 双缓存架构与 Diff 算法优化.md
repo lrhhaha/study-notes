@@ -1,12 +1,14 @@
-可中断的原理：任务切片 + 优先级 + 调度器？
-
-双缓存树 + diff 算法：优化了协调过程，使得协调过程更加高效。（至于是否中断和恢复，应该是由调度器控制的？）
-
 # 题目：Fiber 双缓存架构与 diff 算法优化
+
+# 零、前言
+
+React 在页面更新的时候，使用了双缓存架构去避免页面白屏情况，加上 diff 算法实现高效的虚拟 DOM 对比。
+
+本文将尝试探究双缓存架构 + diff 算法是如何优化页面更新的过程，以及它们背后的逻辑究竟是怎么样的。
 
 # 一、双缓存架构介绍
 
-React 维护了两棵 Fiber 树（即虚拟 DOM 树）：`current`树和`workInProgress`树。`current`树代表当前屏幕上显示的内容，`workInProgress`树代表下次更新需要展示的内容。基于这两颗 fiber 树的页面渲染架构就称为双缓存架构。
+React 维护了两棵 fiber 树（即虚拟 DOM 树）：`current`树和`workInProgress`树。`current`树代表当前屏幕上显示的内容，`workInProgress`树代表下次更新需要展示的内容。基于这两颗 fiber 树的页面渲染架构就称为双缓存架构。
 
 之所以需要使用两颗 fiber 树去辅助页面更新，是因为:
 
@@ -20,7 +22,7 @@ render/Reconciliation 阶段的主要任务：高效对比 current 树与新的 
 
 而如何高效对比 current 树与新的 React 元素，使用的就是所谓的 diff 算法。
 
-> Diff 算法的输入： current Fiber 节点 + 新的 React 元素\
+> Diff 算法的输入： current fiber 节点 + 新的 React 元素\
 > Diff 算法的输出：workInProgress 树（记录下次页面更新需要基于当前 DOM 结构执行哪些操作）
 
 简而言之：在开始协调生成 workInProgress 树的时候，workInProgress 会复制得到 current 树的副本，然后 current 树和新的 React 元素进行 diff 对比，在此过程中对 workInProgress 树进行标记（记录对应节点需要执行的操作）。
@@ -78,12 +80,12 @@ function reconcileChildFibers(
 ) {
   // 伪代码：判断newChild是否为单个节点
   if (isObject(newChild)) {
-    reconcileSingleElement(todo);
+    reconcileSingleElement(returnFiber, currentFirstChild, newChild, lanes);
   }
 
   // 伪代码：判断newChild是否为多个节点
   if (isArray(newChild)) {
-    reconcileChildrenArray(todo);
+    reconcileChildrenArray(returnFiber, currentFirstChild, newChild, lanes);
   }
 
   // 省略其他情况
@@ -250,5 +252,9 @@ function reconcileChildFibers(
 > =========第二轮遍历结束，diff 结束===========
 
 从上述例子可以看出，我们将元素从 abcde 重新排序为 adbc，按道理来说，只需删除 e 节点，并将 d 节点移动到第二位即可。\
-而根据 react 的 diff 算法，会将 bc 节点往后移动，而 d 节点不变。\
+而根据 React 的 diff 算法，会将 bc 节点往后移动，而 d 节点不变。\
 由此可知，为了性能考虑，我们应该尽量减少将节点从后往前移动的操作。\
+
+# 总结
+
+本文主要讨论了双缓存架构对于页面更新的优化意义，以及 React 如何针对不同情况，使用不同的 diff 算法逻辑去进行新旧节点的对比，以便在更好地平衡对比性能与节点复用的关系。
