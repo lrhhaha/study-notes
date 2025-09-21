@@ -36,7 +36,7 @@ render/Reconciliation 阶段的主要任务：高效对比 current 树与新的 
   1. 负责完成节点的处理工作，包括 DOM 节点的创建、属性的设置等。
   2. 在此阶段，React 会收集所有副作用标记（即 flags、subtreeFlags 属性），这些标记记录了组件在 commit 阶段需要执行的操作。
 
-# diff 算法详解
+# 三、diff 算法详解
 
 ## 组件复用判断条件
 
@@ -67,7 +67,7 @@ render/Reconciliation 阶段的主要任务：高效对比 current 树与新的 
 </div>
 ```
 
-# diff 入口
+## diff 入口
 
 diff 的入口函数是 reconcileChildFibers。
 
