@@ -1,6 +1,6 @@
 # 题目： React 架构设计：从 stack reconciler 到 fiber reconciler 的演进
 
-# 零、前言
+# 前言
 
 本文将会讨论 React16 之前 stack reconciler 的特点及性能隐患，以及 React16+ 的 fiber reconciler 的优化思想及 fiber 节点的核心属性。
 
@@ -12,7 +12,7 @@
 4. render 阶段的核心称为 Reconciler（协调器）。
 5. commit 阶段的核心称为 Renderer（渲染器）。
 
-# 一、stack reconciler 与 fiber reconciler 的前世今生
+# stack reconciler 与 fiber reconciler 的前世今生
 
 在 React16 之前，当应用状态发生改变，宏观上会执行以下两部分的工作，以更新 UI：
 
@@ -45,7 +45,7 @@ Reconciler 在处理组件树的更新时，采用的是递归的方式，是一
 
 3. 引入优先级调度系统，不同类型的更新任务有不同优先级，调度系统自动决定任务执行的先后顺序。
 
-# 二、fiber 节点 与 fiber 树
+# fiber 节点 与 fiber 树
 
 Fiber 包含三层含义：
 
@@ -92,17 +92,17 @@ fiber 树的链式树状结构的遍历特点为：
 
 但这仅仅提供了结构上的支持，还需一个“调度者”去控制渲染任务何时、如何中断并恢复。
 
-# 三、fiber 节点关键属性
+# fiber 节点关键属性
 
 接下来介绍 fiber 节点中的一些关键属性，并按照其功能进行分类
 
-## Ⅰ、标识和类型属性
+## 标识和类型属性
 
-### 1、key
+### key
 
 React 元素的 key 属性，用于优化列表对比过程
 
-### 2、tag
+### tag
 
 此属性标识了 Fiber 节点的类型，这个标记不仅用于区分不同类型的节点，更重要的是指导 React 如何处理这个节点。不同类型的节点有不同的处理逻辑和生命周期。
 
@@ -117,7 +117,7 @@ export type WorkTag = 0 | 1 | 2 | 3 |......
 // ......
 ```
 
-### 3、elementType & type
+### elementType & type
 
 elementType：创建 Fiber 时传入的“原始”组件类型
 
@@ -151,43 +151,43 @@ const Comp = React.memo(MyComponent);
 // type → MyComponent（函数本身）
 ```
 
-## Ⅱ、树状结构相关属性
+## 树状结构相关属性
 
 Fiber 节点通过以下三个属性形成链式树状结构：
 
-### 1、return
+### return
 
 指向父 Fiber 节点
 
-### 2、child
+### child
 
 指向第一个子 Fiber 节点
 
-### 3、sibling
+### sibling
 
 指向下一个兄弟 Fiber 节点
 
-## Ⅲ、状态相关属性
+## 状态相关属性
 
-### 1、memoizedProps
+### memoizedProps
 
 上一次渲染时使用的 props
 
-### 2、memoizedState:
+### memoizedState:
 
 上一次渲染时使用的 state
 
-### 3、pendingProps:
+### pendingProps:
 
 新的待处理的 props
 
-### 4、updateQueue:
+### updateQueue:
 
 存储更新对象的队列
 
-## Ⅳ、副作用相关属性
+## 副作用相关属性
 
-### 1、flags
+### flags
 
 标记该 Fiber 节点在 commit 阶段需要执行的副作用（如插入、更新、删除等），可能存在多个副作用。
 
@@ -215,21 +215,21 @@ fiber.flags = Update | ChildDeletion;
 // 0b0000000000000000000000000000100 | 0b0000000000000000000000000010000 = 0b0000000000000000000000000010100
 ```
 
-### 2、subtreeFlags
+### subtreeFlags
 子树中的副作用标记，记录子孙节点中是否有副作用，如有，则当前节点的 subtreeFlags 就不为 0。
 
 在 commit 阶段，React 需要遍历 Fiber 树，找出哪些节点有副作用（flags ≠ 0）并执行它们。但如果某个节点的 subtreeFlags === 0，说明它的整个子树都没有副作用，React 就可以跳过遍历它的所有子孙节点，直接“剪枝优化”，节省大量无意义的遍历开销。
 
-### 3、deletions
+### deletions
 保存当前 fiber 节点的直接子节点中需要被删除的节点。
 
 在协调过程中，被删除的节点就会从 Fiber 树中移除，无法通过 fiber 树寻找到。
 但 commit 阶段仍需要找到它们并执行清理操作（如从 DOM 移除、执行生命周期钩子 /hooks）。
 所以需要使用 deletions 属性保存这些节点。
 
-## Ⅴ、双缓冲机制相关属性
+## 双缓冲机制相关属性
 
-### 1、alternate
+### alternate
 
 指向另一个树中对应的 Fiber 节点
 即 current fiber tree 和 workInProgress fiber tree 的互相引用，实现 fiber tree 的快速切换。
@@ -241,9 +241,9 @@ fiber.flags = Update | ChildDeletion;
 fiber.alternate.alternate === fiber // true
 ```
 
-## Ⅵ、优先级相关属性
+## 优先级相关属性
 
-### 1、lanes
+### lanes
 
 表示该 fiber 任务的优先级。
 此属性的值和 flags 一样，也是二进制数字
@@ -256,13 +256,13 @@ export const InputContinuousHydrationLane = /*   */ 0b00000000000000000000000000
 export const InputContinuousLane = /*            */ 0b0000000000000000000000000001000;
 ```
 
-### 2、childLanes
+### childLanes
 
 记录了当前 Fiber 节点的子树中存在的所有更新优先级（lanes）
 
 在协调阶段，React 会通过检查 childLanes 属性来判断子树中是否有更新，如果没有更新，则跳过子树的遍历。
 
-# 四、从状态更新到页面渲染
+# 从状态更新到页面渲染
 
 接下来我们从宏观角度分解当某个组件的状态发生变化时，React 是如何对 UI 进行更新的。
 
@@ -272,7 +272,7 @@ export const InputContinuousLane = /*            */ 0b00000000000000000000000000
 
 在下一篇文章中，我们将重点讨论此阶段的逻辑。
 
-# 五、总结
+# 总结
 
 本文介绍了
 

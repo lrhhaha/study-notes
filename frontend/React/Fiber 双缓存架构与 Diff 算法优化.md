@@ -1,12 +1,12 @@
 # 题目：Fiber 双缓存架构与 diff 算法优化
 
-# 零、前言
+# 前言
 
 React 在页面更新的时候，使用了双缓存架构去避免页面白屏情况，加上 diff 算法实现高效的虚拟 DOM 对比。
 
 本文将尝试探究双缓存架构 + diff 算法是如何优化页面更新的过程，以及它们背后的逻辑究竟是怎么样的。
 
-# 一、双缓存架构介绍
+# 双缓存架构介绍
 
 React 维护了两棵 fiber 树（即虚拟 DOM 树）：`current`树和`workInProgress`树。`current`树代表当前屏幕上显示的内容，`workInProgress`树代表下次更新需要展示的内容。基于这两颗 fiber 树的页面渲染架构就称为双缓存架构。
 
@@ -16,7 +16,7 @@ React 维护了两棵 fiber 树（即虚拟 DOM 树）：`current`树和`workInP
 >
 > 而基于双缓存树架构，我们可以使用当前页面的结构信息（即 current fiber tree）与下次更新后的页面结构信息（即 JSX 元素编译后的 React 元素）进行对比，从而生成 workInProgress fiber tree，它记录了基于当前页面，有哪些元素需要执行增删改的操作，力求通过复用旧元素，以最小代价更新页面。
 
-# 二、生成 workInProgress 树的过程
+# 生成 workInProgress 树的过程
 
 render/Reconciliation 阶段的主要任务：高效对比 current 树与新的 React 元素，生成 workInProgress 树。
 
@@ -40,9 +40,9 @@ render/Reconciliation 阶段的主要任务：高效对比 current 树与新的 
   1. 负责完成节点的处理工作，包括 DOM 节点的创建、属性的设置等。
   2. 在此阶段，React 会收集所有副作用标记（即 flags、subtreeFlags 属性），这些标记记录了组件在 commit 阶段需要执行的操作。
 
-# 三、diff 算法详解
+# diff 算法详解
 
-## Ⅰ、组件复用判断条件
+## 组件复用判断条件
 
 为了降低算法复杂度，React 会预设三个限制来辅助判断组件是否能复用:
 
@@ -60,7 +60,7 @@ render/Reconciliation 阶段的主要任务：高效对比 current 树与新的 
 2. 优先判断 key 值是否相等
 3. key 值相等的情况下，组件类型 type 也相等，则组件可复用。
 
-## Ⅱ、diff 入口
+## diff 入口
 
 diff 的入口函数是 reconcileChildFibers。
 
@@ -94,7 +94,7 @@ function reconcileChildFibers(
 
 接下来我们我讨论 newChild 为单节点和多节点的情况。
 
-## Ⅲ、单节点 diff
+## 单节点 diff
 
 当 newChild 为单节点的时候，只会执行一轮遍历操作：
 
@@ -105,7 +105,7 @@ function reconcileChildFibers(
 具体流程图如下所示：
 ![单节点diff历程](../assets/images/react单节点diff流程.png)
 
-## Ⅳ、多节点 diff
+## 多节点 diff
 
 当 newChild 为多节点的时候（后续使用 newChildren 表示），则需要使用新的对比逻辑，分为两轮遍历。
 
@@ -168,7 +168,7 @@ function reconcileChildFibers(
 流程图如下所示：
 ![多节点diff第二轮遍历](../assets/images/react多节点diff第二轮遍历.png)
 
-## Ⅴ、例子
+## 例子
 
 上述文字描述可能比较晦涩，接下来将使用一个例子进行介绍
 
@@ -256,6 +256,6 @@ function reconcileChildFibers(
 而根据 React 的 diff 算法，会将 bc 节点往后移动，而 d 节点不变。\
 由此可知，为了性能考虑，我们应该尽量减少将节点从后往前移动的操作。
 
-# 四、总结
+# 总结
 
 本文主要讨论了双缓存架构对于页面更新的优化意义，以及 React 如何针对不同情况，使用不同的 diff 算法逻辑去进行新旧节点的对比，以便在更好地平衡对比性能与节点复用的关系。
