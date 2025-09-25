@@ -2,15 +2,18 @@
 
 # 前言
 
-本文将会讨论 React16 之前 stack reconciler 的特点及性能隐患，以及 React16+ 的 fiber reconciler 的优化思想及 fiber 节点的核心属性。
+React 从 2013 年开源至今，经过了多个版本的迭代，而 React16 版本则是其中一个里程碑式的版本，因其开启了从 stack reconciler 到 fiber reconciler 的转变历程。时至今日的 React19，fiber 架构仍是 React 的底层架构，在近些版本的迭代中，React 基于 fiber 架构丰富了并发模式的各种实现，由此可见 fiber 架构的重要性。
 
-本文后续遵循以下约定：
+本文将会分享 React16 之前 stack reconciler 的特点，以及其存在的隐患，从而引出 React 团队对 fiber 架构的设计及如何使用 fiber reconciler 进行渲染优化。
 
-1. React 应用 UI 更新过程从宏观上拆分为 render 阶段（或 Reconciliation 阶段）和 commit 阶段。
-2. render 阶段主要负责生成新的虚拟 DOM，并计算如何以最小代价更新真实 DOM。
-3. commit 阶段主要负责将 render 阶段计算好的更新内容提交到真实 DOM 上。
-4. render 阶段的核心称为 Reconciler（协调器）。
-5. commit 阶段的核心称为 Renderer（渲染器）。
+# React 更新页面的基本流程
+
+在正式开始介绍 stack reconciler 和 fiber reconciler 之前，我们先了解一下 React 更新页面的基本流程。
+
+无论是在 React16 之前，或是之后，React 在进行页面更新时，都可以宏观地分解为两个阶段，分别是：
+
+- Render / Reconciliation 阶段：又称协调阶段，是 React 在内存中构建虚拟 DOM 树的阶段。此阶段的核心为 Reconciler（协调器）。
+- Commit 阶段：又称提交阶段，是 React 根据虚拟 DOM 树，将要修改的地方一次性提交到真实 DOM 上的阶段。此阶段的核心为 Renderer（渲染器）。
 
 # stack reconciler 与 fiber reconciler 的前世今生
 
@@ -216,11 +219,13 @@ fiber.flags = Update | ChildDeletion;
 ```
 
 ### subtreeFlags
+
 子树中的副作用标记，记录子孙节点中是否有副作用，如有，则当前节点的 subtreeFlags 就不为 0。
 
 在 commit 阶段，React 需要遍历 Fiber 树，找出哪些节点有副作用（flags ≠ 0）并执行它们。但如果某个节点的 subtreeFlags === 0，说明它的整个子树都没有副作用，React 就可以跳过遍历它的所有子孙节点，直接“剪枝优化”，节省大量无意义的遍历开销。
 
 ### deletions
+
 保存当前 fiber 节点的直接子节点中需要被删除的节点。
 
 在协调过程中，被删除的节点就会从 Fiber 树中移除，无法通过 fiber 树寻找到。
