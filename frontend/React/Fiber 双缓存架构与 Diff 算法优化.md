@@ -1,10 +1,13 @@
-# 题目：Fiber 双缓存架构与 diff 算法优化
+# 题目：React 双缓存架构与 diff 算法优化
 
 # 前言
 
-React 在页面更新的时候，使用了双缓存架构去避免页面白屏情况，加上 diff 算法实现高效的虚拟 DOM 对比。
+提到React应用的页面更新优化策略，会有两个绕不开的概念，它们分别是双缓存架构和diff算法。
 
-本文将尝试探究双缓存架构 + diff 算法是如何优化页面更新的过程，以及它们背后的逻辑究竟是怎么样的。
+其中React利用双缓存架构在内存中生成下次要渲染的页面所对应的虚拟DOM树，并且一次性将需要更新的地方提交到真实DOM上，以避免页面出现白屏的情况。
+而diff算法则是实现高效虚拟DOM对比的算法。
+
+本文将分享React中双缓存架构 + diff 算法是如何优化页面更新的过程，以及它们背后的逻辑究竟是怎么样的。
 
 # 双缓存架构介绍
 
@@ -16,10 +19,10 @@ React 维护了两棵 fiber 树（即虚拟 DOM 树）：`current`树和`workInP
 >
 > 而基于双缓存树架构，我们可以使用当前页面的结构信息（即 current fiber tree）与下次更新后的页面结构信息（即 JSX 元素编译后的 React 元素）进行对比，从而生成 workInProgress fiber tree，它记录了基于当前页面，有哪些元素需要执行增删改的操作，力求通过复用旧元素，以最小代价更新页面。
 
-# 生成 workInProgress 树的过程
+# workInProgress 树的生成过程
 
-render/Reconciliation 阶段的主要任务：高效对比 current 树与新的 React 元素，生成 workInProgress 树。
-
+在前一篇文章中提到，React更新页面的过程，可以宏观地分解为Render/Reconciliation 阶段和Commit阶段。
+render阶段的主要任务就是：高效对比 current 树与新的 React 元素，生成 workInProgress 树。
 而如何高效对比 current 树与新的 React 元素，使用的就是所谓的 diff 算法。
 
 > Diff 算法的输入： current fiber 节点 + 新的 React 元素\
@@ -258,4 +261,9 @@ function reconcileChildFibers(
 
 # 总结
 
-本文主要讨论了双缓存架构对于页面更新的优化意义，以及 React 如何针对不同情况，使用不同的 diff 算法逻辑去进行新旧节点的对比，以便在更好地平衡对比性能与节点复用的关系。
+本文介绍了React使用双缓存架构解决页面更新时出现白屏的情况，以及同时能够使用最小代价更新真实DOM，优化了渲染过程。
+而对比current树和新React元素生成workInProgress树的过程是个复杂的过程，React分别针对单节点对比和多节点对比设计了两套diff算法，提高整个对比过程的效率。
+
+分析diff算法的特性，我们得出编写React代码时的最佳实践：
+1. 使用key值标记元素，
+2. 尽量减少将节点从后往前移动的操作
