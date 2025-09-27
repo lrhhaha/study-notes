@@ -274,3 +274,6 @@ function reconcileChildFibers(
 
 1. 尽量减少将节点从后往前移动的操作。
 2. 有必要时（如大型组件位置频繁交换）使用 key 值标记元素，以便复用 DOM 元素。
+
+# 参考文章
+https://react.iamkasong.com/diff/prepare.html
