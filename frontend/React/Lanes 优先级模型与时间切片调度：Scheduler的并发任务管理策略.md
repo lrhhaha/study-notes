@@ -52,7 +52,7 @@ Fiber架构在之前的文章中有聊到，本文只简单提及其核心作用
 
 # Scheduler
 [Scheduler](https://github.com/facebook/react/tree/main/packages/scheduler)是一个功能上独立于React的依赖包，主要实现了时间切片和优先级系统，其官方描述为：
-> This is a package for cooperative scheduling in a browser environment. It is currently used internally by React, but we plan to make it more generic.
+> This is a package for cooperative scheduling in a browser environment. It is currently used internally by React, but we plan to make it more generic.\
 > 可译为：
 > 这是一个用于在浏览器环境中进行协作式调度的包。目前它被 React 内部使用，但我们计划使其更加通用。
 
