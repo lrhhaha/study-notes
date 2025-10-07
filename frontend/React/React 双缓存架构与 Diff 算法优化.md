@@ -31,7 +31,7 @@ Render 阶段的主要任务就是：高效对比 current 树与新的 React 元
 
 简而言之：在开始协调生成 workInProgress 树的时候，workInProgress 会复制得到 current 树的副本，然后 current 树和新的 React 元素进行 diff 对比，在此过程中对 workInProgress 树进行标记（记录对应节点需要执行的操作）。
 
-落实到关键代码中，主要体现在 performUnitOfWork 方法中。此方法接收 current 树的节点作为参数，进行 diff 对比生成 workInProgress 树节点后，返回下一个需要执行的 current 树的节点（由调度器决定是否继续对返回的节点执行 performUnitOfWork 方法，本文暂不展开）。
+落实到关键代码中，主要体现在 performUnitOfWork 方法中。此方法接收 current 树的节点作为参数，进行 diff 对比生成 workInProgress 树节点后。最后将 workInProgress 指向下一个需要执行的 current 树的节点（由调度器决定是否继续对返回的节点执行 performUnitOfWork 方法，本文暂不展开）。
 
 整个 performUnitOfWork 分为两个`递`和`归`两个阶段，分别执行`beginWork`和 `completeWork`方法。
 
@@ -276,4 +276,5 @@ function reconcileChildFibers(
 2. 有必要时（如大型组件位置频繁交换）使用 key 值标记元素，以便复用 DOM 元素。
 
 # 参考文章
+
 https://react.iamkasong.com/diff/prepare.html
