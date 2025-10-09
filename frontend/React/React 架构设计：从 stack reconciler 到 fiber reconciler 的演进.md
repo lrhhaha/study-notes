@@ -330,7 +330,7 @@ fiber.alternate.alternate === fiber // true
 表示该 Fiber 任务的优先级。值越小，代表优先级越高。
 此属性的值和 flags 一样，也是二进制数字。
 
-```
+```javascript
 export const SyncLane: Lane = /*                        */ 0b0000000000000000000000000000001;
 
 export const InputContinuousHydrationLane: Lane = /*    */ 0b0000000000000000000000000000010;
