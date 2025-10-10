@@ -17,19 +17,6 @@ React 如何防止渲染任务阻塞主线程（双 workLoop）
 
 > 总结：并发的特点在于及时响应，并行则在于同时处理。
 
-# React 双工作循环
-
-在 React 中，由于状态的变更（如 setState 的调用）所导致页面的重新渲染可以看作是一个任务（渲染任务）。而这个任务是由多个工作单元所构成的，任务的执行过程实际就是工作单元按顺序执行的过程，当所有工作单元执行完毕，则称此任务完成。
-
-而 React 应用中可能同时存在多个任务，这些任务需要按照一定顺序执行，而因为 JS 是单线程语言，主线程在执行上述任务的过程中，无法响应如用户交互等事件，造成应用卡顿的现象。
-
-为了使任务执行和响应事件之间取得平衡，React 需要设计一个调度方案。可以从宏观上理解为：React 保存了一个任务队列，队列中的任务会按某种顺序提取出来执行，并且每执行完一个任务后，React 会检查这一轮从任务开始执行到此刻，是否超过了 5ms，如没超过则取出下一个任务执行（此任务执行完毕后再次进行检测）；如果超过了 5ms，则将下一次任务调度放到宏任务队列中，从而让出主线程去处理其他事件。此机制就是 React 的任务调度循环。
-
-所谓的“fiber”我们暂且将其理解为上述任务中的工作单元即可。即 fiber 节点等同于工作单元，多个工作单元组成了一个渲染任务。\
-而 fiber 构建循环则是建立于 fiber 架构之上的。
-
-渲染任务执行的过程，其实就是工作单元的执行过程，在此过程中，React 也会对工作单元的执行过程进行检测，每当一个工作单元执行完毕，也会判断任务开始到此刻是否超过了 5ms，如果没超过则取出下一个工作单元进行执行；如超过，则中断任务，让出主线程。（当主线程处理完其他事件后，任务调度循环会取出本次应该执行的任务，如果此任务时此前中断的任务，则可以会有中断处继续执行，无需从头执行）。
-
 # 并发特性概述
 
 在 React 中，由于状态的变更（如 setState 的调用）所导致页面的重新渲染可以看作是一个任务（渲染任务）。在 React16 之前，有两个核心问题：
@@ -56,9 +43,7 @@ React 之所以能拥有并发能力，底层依靠以下三个概念：
 - lanes 模型 —— 任务优先级策略
   - 不同的任务分为不同的优先级。高优先级任务可以打断低优先级任务，以实现重要任务的及时响应。lanes 模型为不同任务赋予不同优先级，配合时间切片实现高优先级任务打断低优先级任务的功能。
 
-接下来将介绍上述三者是如何配合实现`渲染过程不阻塞主线程，及高优先级任务打断低优先级任务`这一并发渲染需要具备的底层能力的。
-
-基于 Fiber 架构，将渲染任务拆分为多个工作单元（为可中断渲染提供数据结构层面的支持），时间切片，释放主线程，任务调度，根据优先级执行任务
+接下来将介绍上述三者是如何配合实现`渲染过程不阻塞主线程`，及`高优先级任务打断低优先级任务`这两个并发特性需要具备的底层能力的。
 
 # 优先级系统
 
@@ -193,6 +178,8 @@ Fiber 架构在之前的文章中有聊到，本文只简单提及其核心作�
 > 可译为：
 > 这是一个用于在浏览器环境中进行协作式调度的包。目前它被 React 内部使用，但我们计划使其更加通用。
 
+React 使用此依赖包进行任务的调度，使任务的执行不会长期阻塞主线程，提供并发特性的底层支持。
+
 ## 任务创建与调度
 
 Scheduler 通过暴露 unstable_scheduleCallback 函数，给使用者创建任务，并自动进度调度。
@@ -201,9 +188,9 @@ Scheduler 通过暴露 unstable_scheduleCallback 函数，给使用者创建任�
 function unstable_scheduleCallback(priorityLevel, callback, options) {}
 ```
 
-unstable_scheduleCallback 会创建任务加入到任务队列中，然后调用 schedulePerformWorkUntilDeadline 函数进行调度。
+`unstable_scheduleCallback` 会创建任务并加入到任务队列中，然后调用 schedulePerformWorkUntilDeadline 函数进行调度。
 
-schedulePerformWorkUntilDeadline 函数如下所示，会根据不同的环境选择不同的调度方案，在正常浏览器中，会使用 MessageChannel 发布任务调度的消息。
+schedulePerformWorkUntilDeadline 函数如下所示，会根据不同的环境选择不同的调度方案，在正常浏览器中，会使用 **MessageChannel** 发布任务调度的消息。
 
 ```javascript
 let schedulePerformWorkUntilDeadline;
@@ -229,12 +216,14 @@ if (typeof localSetImmediate === "function") {
 }
 ```
 
-MessageChannel 将任务调度加入到宏任务队列中，浏览器将通过事件循环机制，在合适的事件调用此宏任务，即执行上面代码中的 performWorkUntilDeadline 函数。
+MessageChannel 将任务调度加入到宏任务队列中，浏览器将通过**事件循环机制**，在合适的事件调用此宏任务，即执行上面代码中的 performWorkUntilDeadline 函数。
+
+performWorkUntilDeadline 中将会正式调用 scheduledHostCallback**执行渲染任务**（具体执行方式见文章后续的 workLoop），并且通过其返回值判断是否有剩余任务，如果有的话，则通过 MessageChannel 重新发起调度，等待浏览器事件循环机制执行，确保不会阻塞主线程。
 
 ```javascript
 const performWorkUntilDeadline = () => {
+  //
   if (scheduledHostCallback !== null) {
-    // scheduledHostCallback是我们在requestHostCallback中赋值的flushWork
     const currentTime = getCurrentTime();
     startTime = currentTime;
     const hasTimeRemaining = true;
@@ -258,7 +247,6 @@ const performWorkUntilDeadline = () => {
   needsPaint = false;
 };
 ```
-performWorkUntilDeadline中将会正式调用scheduledHostCallback执行渲染任务（具体执行方式见文章后续的workLoop），并且通过其返回值判断是否有剩余任务，如果有的话，则通过MessageChannel重新发起调度，等待浏览器事件循环机制执行，确保不会阻塞主线程。
 
 ## 时间切片
 
@@ -377,9 +365,6 @@ function workLoop(hasTimeRemaining, initialTime) {
 为了让整个渲染过程具备更高的灵活性，在 fiber 工作单元执行的过程中，也有一个工作循环对其进行控制，即 fiber 构建循环。
 
 同样地，在 fiber 构建的过程中，每执行完一个工作单元，就会调用 shouldYieldToHost（代码中导入时会重命名为 shouldYield）判断时间切片是否超时，如没超时则继续执行下一个工作单元，否则将会中断当前任务，让出主线程。且得益于 Fiber 架构的链式树状结构，在下次任务恢复时，可从中断的工作单元处恢复执行，而无需重新执行整个任务。
-fiber 构建循环的源码可在[这里](https://github.com/facebook/react/blob/v18.3.1/packages/react-reconciler/src/ReactFiberWorkLoop.new.js#L1829-L1834)阅读。
-
-注意下面源码中的 performUnitOfWork 函数即是 fiber 工作单元的执行函数，workInProgress 记录着当前需要执行的 fiber 节点，如 workInProgress 的值为 null，则证明当前任务的所有工作单元都已执行完毕。
 
 ```javascript
 function workLoopConcurrent() {
@@ -390,6 +375,8 @@ function workLoopConcurrent() {
 }
 ```
 
+上面源码中的 [performUnitOfWork](https://github.com/facebook/react/blob/v18.3.1/packages/react-reconciler/src/ReactFiberWorkLoop.new.js#L1829-L1834) 函数即是 fiber 工作单元的执行函数，workInProgress 记录着当前需要执行的 fiber 节点，如 workInProgress 的值为 null，则证明当前任务的所有工作单元都已执行完毕。
+
 #### 双工作循环总结
 
 上述 Scheduler 和 Reconciler 中的两个工作循环，分别从任务层面和 fiber 工作单元的层面进行控制，使得 React 应用在执行渲染任务的过程中，能够及时主动地让出主线程，响应其他事件。
@@ -397,9 +384,50 @@ function workLoopConcurrent() {
 它们的关系如下图所示：
 ![React双工作循环](../assets/images/React双workLoop.png)
 
-至此，React 通过双工作循环与时间切片，已经解决了同步执行渲染任务导致应用卡顿的问题了。
+至此，React 通过双工作循环与时间切片配合，已经解决了同步执行渲染任务导致主线程无法响应用户事件的问题了。
 
-让关键任务永不等待，可以使用 requestIdleCallbak，使用其 IdleDeadline.timeRemaining()判断当前帧是否有空闲时间，从而决定是否要执行下一个工作单元即可。
-但是，因为 requestIdleCallback 存在。。。问题。
+# 高优先级任务打断低优先级任务
 
-所以 Scheduler 需要编写一个时间切片的功能，其核心是在适当的时候让出主线程，防止渲染任务阻塞主线程。
+## 根据优先级打断的必要性
+
+通过上面提到了通过双工作循环加事件切片，已经实现了渲染任务的异步执行，每隔大约 5ms 会让出主线程，去处理用户交互等事件。但要真正做到优化用户体验，似乎仅仅实现任务异步执行是不足够的，试想一下如下场景。
+
+假设现在我们的任务队列中有多个任务，现在按按照上述双工作循环异步执行，而此时用户触发了点击事件，导致 React 应用的状态发生了改变，从而触发了一个新的渲染任务，并放置到任务队列的末端。那么按照上述逻辑，这个新的渲染任务需要等待前面的所有渲染任务执行完毕之后，才会执行，那么`从用户点击到任务执行之间就存在较长的等待时间`，用户可能会认为这是一个不好的体验。
+
+上述场景的问题在于，任务队列中的任务没有优先级的概念，遵循先进先出的规则。那么像用户交互而触发的状态变化引起的渲染任务，可能需要等待较长时间才能执行，从而导致体验不佳。
+
+为了优化上述场景，React 将不同情况引起的状态改变而触发的渲染任务分为不同的优先级（即上面提到的 lanes 优先级模型），并且在低优先级任务执行期间，如果触发了高优先级任务，则高优先级任务可以“打断”低优先级任务，先行执行。
+
+## 根据优先级打断的原理
+
+上提到的“高优先级任务打断低优先级任务”的描述其实并不严谨。
+
+实际上，当执行低优先级任务时，如果触发了高优先级任务，那么高优先级任务并`不会主动打断`低优先级任务的执行。而是任务调度循环基于时间片打断低优先级任务，然后在下一次任务调度的时候，在任务队列中取出优先级最高的任务执行。但由于5ms的时间片很短暂，所以造成高优先级任务主动打断低优先级任务的错觉。
+
+```javascript
+function workLoop(hasTimeRemaining, initialTime) {
+  let currentTime = initialTime;
+  advanceTimers(currentTime);
+
+  // 通过小顶堆获取第一个优先级最高的任务
+  currentTask = peek(taskQueue);
+  
+  // ...some code...
+  // 循环执行任务队列中的任务，直至时间片耗尽
+}
+```
+
+# 总结
+
+# React 双工作循环
+
+在 React 中，由于状态的变更（如 setState 的调用）所导致页面的重新渲染可以看作是一个任务（渲染任务）。而这个任务是由多个工作单元所构成的，任务的执行过程实际就是工作单元按顺序执行的过程，当所有工作单元执行完毕，则称此任务完成。
+
+而 React 应用中可能同时存在多个任务，这些任务需要按照一定顺序执行，而因为 JS 是单线程语言，主线程在执行上述任务的过程中，无法响应如用户交互等事件，造成应用卡顿的现象。
+
+为了使任务执行和响应事件之间取得平衡，React 需要设计一个调度方案。可以从宏观上理解为：React 保存了一个任务队列，队列中的任务会按某种顺序提取出来执行，并且每执行完一个任务后，React 会检查这一轮从任务开始执行到此刻，是否超过了 5ms，如没超过则取出下一个任务执行（此任务执行完毕后再次进行检测）；如果超过了 5ms，则将下一次任务调度放到宏任务队列中，从而让出主线程去处理其他事件。此机制就是 React 的任务调度循环。
+
+所谓的“fiber”我们暂且将其理解为上述任务中的工作单元即可。即 fiber 节点等同于工作单元，多个工作单元组成了一个渲染任务。\
+而 fiber 构建循环则是建立于 fiber 架构之上的。
+
+渲染任务执行的过程，其实就是工作单元的执行过程，在此过程中，React 也会对工作单元的执行过程进行检测，每当一个工作单元执行完毕，也会判断任务开始到此刻是否超过了 5ms，如果没超过则取出下一个工作单元进行执行；如超过，则中断任务，让出主线程。（当主线程处理完其他事件后，任务调度循环会取出本次应该执行的任务，如果此任务时此前中断的任务，则可以会有中断处继续执行，无需从头执行）。
