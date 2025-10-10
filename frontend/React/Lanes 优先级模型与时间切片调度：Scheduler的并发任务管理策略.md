@@ -424,3 +424,11 @@ function workLoop(hasTimeRemaining, initialTime) {
 - 多个任务以时间片为单位执行，而非同步地一次性执行，每消耗完一个时间片，让出主线程。
 - 通过任务调度循环和Fiber构建循环，从任务层面和Fiber工作单元层面分别检测时间片，以更小颗粒度进行任务调度。
 - 为每个任务分配优先级，在每个时间片进行任务调度时，总是取出最高优先级的任务执行，以便及时响应高优先级任务。
+
+# 参考
+
+- https://juejin.cn/post/7371311251434881074
+- https://juejin.cn/post/7171231346361106440
+- https://juejin.cn/post/7087933643821154312
+- https://juejin.cn/post/7276814487055056933
+- https://juejin.cn/post/7087747915950604318
