@@ -24,7 +24,8 @@ React 作为著名的 UI 构建库，快速响应是其特点之一。然而 JS 
 
 # 并发特性概述
 
-在 React 中，由于状态的变更（如 setState 的调用）所导致页面的重新渲染可以看作是一个任务（渲染任务）。在 React16 之前，有两个核心问题：
+在 React 中，由于状态的变更（如 setState 的调用）所导致页面的重新渲染可以看作是一个任务（渲染任务）。\
+在 React16 之前，有两个核心问题：
 
 1. 渲染任务不可中断，无法及时响应用户的操作，造成应用卡顿的风险。
 2. 渲染任务无法根据优先级排序，后面触发的高优先级任务需要等待之前的低优先级任务执行完毕之后才能执行，造成用户体验不佳。
@@ -283,7 +284,7 @@ function shouldYieldToHost() {
 
 在 React 中，每当状态改变而触发的渲染任务会存放在任务队列 taskQueue 中，我们不能一次性地清空任务队列（可能会阻塞主线程，引起应用卡顿），而应该使用循环配合时间片的方式去调度任务的执行。
 
-而负责调度 taskQueue 执行的调度器则是 Scheduler，它控制的循环可称为`任务调度循环`，
+而负责调度 taskQueue 执行的调度器则是 Scheduler，它控制的循环可称为`任务调度循环`。
 
 具体体现为 workLoop 函数，此循环会不断从任务队列中取出任务执行，并且调用 shouldYieldToHost 函数进行判断，在适当时机让出主线程。
 以下为 workLoop 函数节选，完整代码在[这里](https://github.com/facebook/react/blob/v18.3.1/packages/scheduler/src/forks/Scheduler.js#L189)阅读
