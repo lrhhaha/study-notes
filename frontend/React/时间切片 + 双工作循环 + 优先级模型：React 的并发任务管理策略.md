@@ -1,4 +1,4 @@
-# 标题：Lanes 优先级模型与时间切片：Scheduler 的并发任务管理策略
+# 标题：时间切片 + 双工作循环 + 优先级模型：React 的并发任务管理策略
 
 # 前言
 
@@ -24,7 +24,8 @@ React 作为著名的 UI 构建库，快速响应是其特点之一。然而 JS 
 
 # 并发特性概述
 
-在 React 中，由于状态的变更（如 setState 的调用）所导致页面的重新渲染可以看作是一个任务（渲染任务）。在 React16 之前，有两个核心问题：
+在 React 中，由于状态的变更（如 setState 的调用）所导致页面的重新渲染可以看作是一个任务（渲染任务）。\
+在 React16 之前，有两个核心问题：
 
 1. 渲染任务不可中断，无法及时响应用户的操作，造成应用卡顿的风险。
 2. 渲染任务无法根据优先级排序，后面触发的高优先级任务需要等待之前的低优先级任务执行完毕之后才能执行，造成用户体验不佳。
@@ -56,6 +57,8 @@ React 之所以能拥有并发能力，底层依靠以下三个概念：
 React 自身拥有 Lanes 优先级，在 Fiber 节点中以 lanes 属性记录。
 
 Lanes 优先级系统使用二进制数字代表优先级，数字越小优先级越高。
+
+如下节选部分优先级，完整优先级见[这里](https://github.com/facebook/react/blob/v18.3.1/packages/react-reconciler/src/ReactFiberLane.old.js#L33)
 
 ```javascript
 export const SyncLane: Lane = /*                        */ 0b0000000000000000000000000000001;
@@ -180,17 +183,17 @@ React 使用此依赖包进行任务的调度，使任务的执行不会长期�
 
 ## 任务创建与调度
 
-Scheduler 通过暴露 unstable_scheduleCallback 函数，给使用者创建任务，并自动进行调度。
+Scheduler 通过暴露 [unstable_scheduleCallback](https://github.com/facebook/react/blob/v18.3.1/packages/scheduler/src/forks/Scheduler.js#L308) 函数，给使用者创建任务，并自动进行调度。
 
 ```javascript
 function unstable_scheduleCallback(priorityLevel, callback, options) {}
 ```
 
-`unstable_scheduleCallback` 会创建任务并加入到任务队列中，然后调用 schedulePerformWorkUntilDeadline 函数进行调度。
+`unstable_scheduleCallback` 会创建任务并加入到任务队列中，然后调用 `schedulePerformWorkUntilDeadline` 函数进行调度。
 
 schedulePerformWorkUntilDeadline 函数如下所示，会根据不同的环境选择不同的调度方案，在正常浏览器中，会使用 [**MessageChannel**](https://developer.mozilla.org/zh-CN/docs/Web/API/MessageChannel) 发布任务调度的消息。
 
-> MessageChannel实例拥有两个端口port，可以分别监听和发送消息。\
+> MessageChannel 实例拥有两个端口 port，可以分别监听和发送消息。\
 > 当监听函数被触发时，会作为宏任务加入宏任务队列，需浏览器的事件循环机制进行调度执行。
 
 ```javascript
@@ -219,7 +222,7 @@ if (typeof localSetImmediate === "function") {
 
 MessageChannel 将任务调度加入到宏任务队列中，浏览器将通过**事件循环机制**，在合适的事件调用此宏任务，即执行上面代码中的 performWorkUntilDeadline 函数。
 
-performWorkUntilDeadline 中将会正式调用 scheduledHostCallback**执行渲染任务**（具体执行方式见文章后续的 workLoop），并且通过其返回值判断是否有剩余任务，如果有的话，则通过 MessageChannel 重新发起调度，等待浏览器事件循环机制执行，确保不会阻塞主线程。
+performWorkUntilDeadline 中将会正式调用 scheduledHostCallback **执行渲染任务**（具体执行方式见文章后续的 workLoop），并且通过其返回值判断是否有剩余任务，如果有的话，则通过 MessageChannel 重新发起调度，等待浏览器事件循环机制执行，确保不会阻塞主线程。
 
 ```javascript
 const performWorkUntilDeadline = () => {
@@ -253,7 +256,7 @@ const performWorkUntilDeadline = () => {
 
 时间切片的含义在于，规定时间片的长度，每执行完一个任务后，检查本轮耗时是否超过时间片范围，如超过则让出主线程，并在下一轮事件循环中继续执行任务。
 
-实现时间分片的主要函数之一为 shouldYieldToHost，它的作用在于检测当前时间切片的时间是否耗尽，是否需要让出主线程。
+实现时间分片的主要函数之一为 [shouldYieldToHost](https://github.com/facebook/react/blob/v18.3.1/packages/scheduler/src/forks/Scheduler.js#L440)，它的作用在于检测当前时间切片的时间是否耗尽，是否需要让出主线程。
 
 ```javascript
 function shouldYieldToHost() {
@@ -281,69 +284,66 @@ function shouldYieldToHost() {
 
 在 React 中，每当状态改变而触发的渲染任务会存放在任务队列 taskQueue 中，我们不能一次性地清空任务队列（可能会阻塞主线程，引起应用卡顿），而应该使用循环配合时间片的方式去调度任务的执行。
 
-而负责调度 taskQueue 执行的调度器则是 Scheduler，它控制的循环可称为`任务调度循环`，
+而负责调度 taskQueue 执行的调度器则是 Scheduler，它控制的循环可称为`任务调度循环`。
 
 具体体现为 workLoop 函数，此循环会不断从任务队列中取出任务执行，并且调用 shouldYieldToHost 函数进行判断，在适当时机让出主线程。
 以下为 workLoop 函数节选，完整代码在[这里](https://github.com/facebook/react/blob/v18.3.1/packages/scheduler/src/forks/Scheduler.js#L189)阅读
 
 ```javascript
 function workLoop(hasTimeRemaining, initialTime) {
-  let currentTime = initialTime;
-  advanceTimers(currentTime);
-  // 通过小顶堆获取优先级最高的任务
-  currentTask = peek(taskQueue);
-  while (
-    currentTask !== null &&
-    !(enableSchedulerDebugging && isSchedulerPaused)
+  let currentTime = initialTime;
+  advanceTimers(currentTime); // 通过小顶堆获取优先级最高的任务
+  currentTask = peek(taskQueue);
+  while (
+    currentTask !== null &&
+    !(enableSchedulerDebugging && isSchedulerPaused)
   ) {
-    if (
-      currentTask.expirationTime > currentTime &&
-      (!hasTimeRemaining || shouldYieldToHost()) // 判断是不是过期
-    ) {
-      // 任务没有超时并且时间片时间已耗尽
+    if (
+      currentTask.expirationTime > currentTime &&
+      (!hasTimeRemaining || shouldYieldToHost())
+    ) {
+      // 判断是不是过期
+      // 任务没有超时并且时间片时间已耗尽
       // This currentTask hasn't expired, and we've reached the deadline.
-      break;
-    }
+      break;
+    }
     // 获取任务的回调函数
-    const callback = currentTask.callback;
-    if (typeof callback === 'function') {
-      currentTask.callback = null;
-      currentPriorityLevel = currentTask.priorityLevel;
+    const callback = currentTask.callback;
+    if (typeof callback === "function") {
+      currentTask.callback = null;
+      currentPriorityLevel = currentTask.priorityLevel;
       // 回调是不是已经过期
-      const didUserCallbackTimeout = currentTask.expirationTime <= currentTime;
-      if (enableProfiling) {
-        markTaskRun(currentTask, currentTime);
-      }
-      // 执行任务，并返回任务是否中断还是已执行完成
-      const continuationCallback = callback(didUserCallbackTimeout);
-      currentTime = getCurrentTime();
-      // 如果callback执行之后的返回类型是function类型就把又赋值给currentTask.callback，说明没执行完。没有执行完就不会执行pop逻辑，下一次返回的还是当前任务
-      if (typeof continuationCallback === 'function') {
-        currentTask.callback = continuationCallback;
-      } else {
-      // 不是函数说明当前任务执行完，弹出来就行
-        if (currentTask === peek(taskQueue)) {
-          pop(taskQueue);
-        }
-      }
-      advanceTimers(currentTime);
-    } else {
-      pop(taskQueue);
-    }
+      const didUserCallbackTimeout = currentTask.expirationTime <= currentTime;
+      if (enableProfiling) {
+        markTaskRun(currentTask, currentTime);
+      } // 执行任务，并返回任务是否中断还是已执行完成
+      const continuationCallback = callback(didUserCallbackTimeout);
+      currentTime = getCurrentTime(); // 如果callback执行之后的返回类型是function类型就把又赋值给currentTask.callback，说明没执行完。没有执行完就不会执行pop逻辑，下一次返回的还是当前任务
+      if (typeof continuationCallback === "function") {
+        currentTask.callback = continuationCallback;
+      } else {
+        // 不是函数说明当前任务执行完，弹出来就行
+        if (currentTask === peek(taskQueue)) {
+          pop(taskQueue);
+        }
+      }
+      advanceTimers(currentTime);
+    } else {
+      pop(taskQueue);
+    }
     // 取出下一个任务
-    currentTask = peek(taskQueue);
-  }
-  // 如果task队列没有清空, 返回true。 等待Scheduler调度下一次回调
+    currentTask = peek(taskQueue);
+  } // 如果task队列没有清空, 返回true。 等待Scheduler调度下一次回调
   // Return whether there's additional work
-  if (currentTask !== null) {
-    return true;
+  if (currentTask !== null) {
+    return true;
   } else {
-  // task队列已经清空, 返回false.
-    const firstTimer = peek(timerQueue);
-    if (firstTimer !== null) {
-      requestHostTimeout(handleTimeout, firstTimer.startTime - currentTime);
-    }
-    return false;
+    // task队列已经清空, 返回false.
+    const firstTimer = peek(timerQueue);
+    if (firstTimer !== null) {
+      requestHostTimeout(handleTimeout, firstTimer.startTime - currentTime);
+    }
+    return false;
   }
 }
 ```
@@ -356,7 +356,7 @@ function workLoop(hasTimeRemaining, initialTime) {
 
 上述提到的隐患的确是存在的，为了避免单个任务执行时间过长，从而阻塞主线程，React 除了上述提到的任务调度循环，还设计了另一个颗粒度更细的循环机制加以辅助——`Fiber构建循环`。
 
-Fiber构建循环存在于 react-reconciler 包中，而不是 Scheduler 包中，因为 Fiber 工作单元的执行属于协调过程。
+Fiber 构建循环存在于 react-reconciler 包中，而不是 Scheduler 包中，因为 Fiber 工作单元的执行属于协调过程。
 
 上面我们提到了，React 借助 Fiber 架构，将`一整个渲染任务拆分成多个工作单元`（即 Fiber 节点），每个工作单元的执行过程就是 Reconciler 构建 workInProgress 树的过程。当某个任务中的所有工作单元执行完成之后，那么此任务也就执行完成了。
 
@@ -416,13 +416,15 @@ function workLoop(hasTimeRemaining, initialTime) {
 
 # 总结
 
-为了优化用户体验，React设计了并发的任务管理策略，实现了以下两个目标:
+为了优化用户体验，React 设计了并发的任务管理策略，实现了以下两个目标:
+
 - 在任务执行过程中，主动让出主线程，响应其他事件。
 - 在执行低优先级任务过程中，如触发了高优先级任务，可通过调度策略，优先执行高优先级任务。
 
 实现的逻辑主要集中在时间切片 + 双工作循环 + 优先级系统：
+
 - 多个任务以时间片为单位执行，而非同步地一次性执行，每消耗完一个时间片，让出主线程。
-- 通过任务调度循环和Fiber构建循环，从任务层面和Fiber工作单元层面分别检测时间片，以更小颗粒度进行任务调度。
+- 通过任务调度循环和 Fiber 构建循环，从任务层面和 Fiber 工作单元层面分别检测时间片，以更小颗粒度进行任务调度。
 - 为每个任务分配优先级，在每个时间片进行任务调度时，总是取出最高优先级的任务执行，以便及时响应高优先级任务。
 
 # 参考
