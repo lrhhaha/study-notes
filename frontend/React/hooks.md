@@ -272,18 +272,27 @@ type Hook = {
 
 ### 不同 Hook 的 memoizedState 含义一览
 
-memoizedState 是 “这个 Hook 的已提交快照”，具体形态随 Hook 类型不同：
+memoizedState： 是 “这个 Hook 的已提交快照”，具体形态随 Hook 类型不同：
 
-Hook	hook.memoizedState 的内容
-useState	保存当前 state 值（例如 number/string/object）。
-useReducer	保存当前 state 值；此外 queue.lastRenderedReducer/State 会记住上次用于优化的 reducer 与结果。
-useRef	保存 ref 对象：{ current: T }。注意：同一次渲染内，ref 对象稳定不变。
-useEffect	保存一个 Effect 节点（或一个以 next 串起的环）：{ tag, create, destroy, deps, next }。deps 保存依赖数组快照。
-useLayoutEffect	同 useEffect，只是 执行时机不同（commit 同步阶段 vs. layout 阶段）。
-useMemo	形如 [value, deps] 的数组快照；只有在依赖变更时才重算。
-useCallback	形如 [callback, deps] 的数组快照；依赖不变则返回同一函数引用。
-useTransition	保存内部小状态（如 isPending）与 startTransition 的闭包上下文。
-useDeferredValue	保存“延迟版本”的值与相关优先级元数据。
+Hook：	  hook.memoizedState 的内容
+
+useState：	  保存当前 state 值（例如 number/string/object）。
+
+useReducer：	  保存当前 state 值；此外 queue.lastRenderedReducer/State 会记住上次用于优化的 reducer 与结果。
+
+useRef：	  保存 ref 对象：{ current: T }。注意：同一次渲染内，ref 对象稳定不变。
+
+useEffect：	   保存一个 Effect 节点（或一个以 next 串起的环）：{ tag, create, destroy, deps, next }。deps 保存依赖数组快照。
+
+useLayoutEffect：	   同 useEffect，只是 执行时机不同（commit 同步阶段 vs. layout 阶段）。
+
+useMemo：	   形如 [value, deps] 的数组快照；只有在依赖变更时才重算。
+
+useCallback：	   形如 [callback, deps] 的数组快照；依赖不变则返回同一函数引用。
+
+useTransition：	   保存内部小状态（如 isPending）与 startTransition 的闭包上下文。
+
+useDeferredValue：	   保存“延迟版本”的值与相关优先级元数据。
 
 小结：同一字段名 memoizedState，根据 Hook 类型承载不同数据形态；这是 Hook 抽象的“多态性”。
 

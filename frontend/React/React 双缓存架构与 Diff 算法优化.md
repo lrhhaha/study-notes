@@ -143,16 +143,16 @@ function reconcileChildFibers(
 进入第二轮遍历时，会有如下四种情况：
 
 - newChildren 和 oldFiber 同时遍历完：
-  新旧节点都遍历完，无需进行第二轮遍历，diff 结束。
+  新旧节点都遍历完，无需进行第二轮遍历，`diff 结束`。
 
 - newChildren 未遍历完，oldFiber 遍历完：
-  此时因为 oldFiber 都已遍历完，证明所有旧 DOM 节点都已复用，剩下的 newChildren 都需要创建新的 DOM 节点来使用，diff 结束。
+  此时因为 oldFiber 都已遍历完，证明所有旧 DOM 节点都已复用，剩下的 newChildren 都需要创建新的 DOM 节点来使用，`diff 结束`。
 
 - newChildren 遍历完，oldFiber 未遍历完：
-  此时意味着所有新的节点都已拥有对应的 DOM 节点，而剩余的 oldFiber 节点则无需再使用，标记为需要被删除，diff 结束。
+  此时意味着所有新的节点都已拥有对应的 DOM 节点，而剩余的 oldFiber 节点则无需再使用，标记为需要被删除，`diff 结束`。
 
 - newChildren 和 oldFiber 都没遍历完：
-  此时意味着有节点在此次更新中更换了位置，需要进行第二轮遍历以找出可以复用的节点。
+  此时意味着有节点在此次更新中更换了位置，需要`进行第二轮遍历`以找出可以复用的节点。
 
 #### 正式流程
 
