@@ -157,16 +157,75 @@ export function useEffect(create, deps): void {
 }
 ```
 
-从上述useState和useEffect的例子可见，一般情况下，一个Hook函数被调用时，不会立即执行对应Hook的“本体”，而是先通过ReactCurrentDispatcher.current获取到当前组件所需的Hooks集合（HooksDispatcherOnMount 或 HooksDispatcherOnUpdate），然后从中取出真正的“本体”执行。
+从上述 useState 和 useEffect 的例子可见，一般情况下，一个 Hook 函数被调用时，不会立即执行对应 Hook 的“本体”，而是先通过 ReactCurrentDispatcher.current 获取到当前组件所需的 Hooks 集合（HooksDispatcherOnMount 或 HooksDispatcherOnUpdate），然后从中取出真正的“本体”执行。
 
-而上述useState和useEffect中的resolveDispatcher函数，本质就是返回ReactCurrentDispatcher.current的指向，源码如下所示：
+而上述 useState 和 useEffect 中的 resolveDispatcher 函数，本质就是返回 ReactCurrentDispatcher.current 的指向，源码如下所示：
+
 ```javascript
 function resolveDispatcher() {
-  const dispatcher = ReactCurrentDispatcher.current
-  return dispatcher
+  const dispatcher = ReactCurrentDispatcher.current;
+  return dispatcher;
 }
 ```
 
 画图！！！！
-useState -> 调用resolveDispatcher，获取ReactCurrentDispatcher.current -> 指向 HooksDispatcherOnMount 或 HooksDispatcherOnUpdate -> 从中取出Hook本体
+useState -> 调用 resolveDispatcher，获取 ReactCurrentDispatcher.current -> 指向 HooksDispatcherOnMount 或 HooksDispatcherOnUpdate -> 从中取出 Hook 本体
 
+## ReactCurrentDispatcher.current 的指向
+
+现在我们知道了 ReactCurrentDispatcher.current 会根据当前被调用的组件所处的阶段，指向 HooksDispatcherOnMount 或 HooksDispatcherOnUpdate 对象。接下来我们将探讨 ReactCurrentDispatcher.current 是如何指向正确的 Hooks 集合的。
+
+在开始之前，我们需要知道在 React 的双缓存架构中，维护着 current fiber tree 和 workInProgress fiber tree 这两颗树，它们分别代表当前页面的 fiber 节点所组成的树，和下一个页面的 fiber 节点所组成的树。
+
+而对于某个组件而言，当它在初始化挂载的时候，是没有对应的 current fiber 节点的，只有当挂载完毕之后，才会将 workInprogress fiber 节点赋值给 current fiber 节点。所以 React 判断当前组件是否是处于初始化挂载阶段，采用的是`判断其 current fiber 节点是否为空`，反之则为更新阶段。
+
+除了上述判断条件之外，我们还需引入另一个条件进行辅助判断：当前组件是否已经初始化过 Hooks。代码中的体现为判断 current.memoizedState 属性是否为空，此属性用于当前组件存储自身所有的 Hooks（以链表的方式存储，本文后续将会提到）。使用 memoizedState 进行辅助判断的原因是 React 的渲染过程是可以中断的，可能出现的一种情况为，已经为当前组件创建了 fiber 节点但没有提交，此时渲染中断，等到后续重新渲染的时候，可以复用之前的 fiber 节点，但是其 Hooks 是没有初始化，即 memoizedState 属性为空。
+
+归纳一下，ReactCurrentDispatcher.current 只有如下两种情况会指向 HooksDispatcherOnMount，其余情况都指向 HooksDispatcherOnUpdate：
+
+1. 当前组件 fiber 节点没有初始化过
+2. 当前组件 fiber 节点的 memoizedState 属性为空（即 Hooks 链表为空）
+
+节选代码如下所示：
+
+```javascript
+export function renderWithHooks(
+  current, // current Fiber
+  workInProgress, // workInProgress Fiber
+  Component // 函数组件本身
+  // ... 其他形参 ...
+) {
+  // ... some code ...
+
+  ReactCurrentDispatcher.current =
+    current === null || current.memoizedState === null // current.memoizedState === null 代表当前组件没有使用过任何Hooks，需要使用HooksDispatcherOnMount中的Hooks进行初始化
+      ? HooksDispatcherOnMount
+      : HooksDispatcherOnUpdate;
+
+  // ... some code ...
+}
+```
+
+# Hook的数据结构
+
+
+
+# Hook是如何被存储的
+
+
+# 从函数组件的执行说起
+
+函数组件的本质就是一个 JS 函数，那么它们是如何被调用的呢？
+
+答案就是上一节所提到的`renderWithHooks`函数，此函数会接收如下几个参数：
+
+```javascript
+renderWithHooks(
+  current, // current Fiber
+  workInProgress, // workInProgress Fiber
+  Component, // 函数组件本身
+  props, // props
+  context, // 上下文
+  renderExpirationTime // 渲染 ExpirationTime
+);
+```
