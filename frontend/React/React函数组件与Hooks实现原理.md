@@ -206,14 +206,50 @@ export function renderWithHooks(
 }
 ```
 
-# Hook的数据结构
+# Hook的数据结构及储存方式
+接下来我们聊一下Hooks执行之后，会生成什么样的数据结构进行存储。
+在源码中，我们可以看到执行之后的Hook会以对象的形式存储，而每个Hook对象拥有如下5个属性：
+```typescript
+export type Hook = {
+  memoizedState: any,
+  baseState: any,
+  baseQueue: Update<any, any> | null,
+  queue: any,
+  next: Hook | null,
+};
+```
+- memoizedState： 保存当前Hook的状态值，不同类型的Hook保存不同的信息。（如useState中 保存 state 信息、useEffect 中 保存着 effect 对象、useRef 中保存的是 ref 对象）。
+- baseState：保存在上一次 render 中未被跳过的 state 基准值（主要用于 useState 和 useReducer 的批量更新或中断更新场景。如：在并发模式（Concurrent Mode）下，如果某个更新被中断或跳过，React 需要一个“基础状态”来重新计算后续更新。baseState 就是这个起点。）
+- baseQueue：保存那些尚未被处理（或被跳过）的更新队列。（低优先级更新被高优先级更新打断后，这些被挂起的更新会被暂存在 baseQueue 中，等到合适的时机再重新应用。）
+- queue：储存当前Hook的更新对象（以链表的方式存储）
+- next：指向当前组件的下一个Hook对象的引用。
+
+当我们大概了解Hook的结构后，再聊聊它们是如何与对应的组件进行绑定及存储的。
+函数组件不像类组件那样有自己的实例，它们是以fiber节点的形式存在的。其中Fiber对象中有一个关键的`memoizedState`属性，此属性储存当前函数组件所有Hook对象所组成的链表（在类组件中，此属性储存的则是当前组件的状态）。
+当我们在一个组件中调用多个Hooks时，React会为每个Hook创建一个对象，并按顺序挂载到fiber.memoizedState中：
+```
+fiber.memoizedState
+  ↓
+Hook1 (useState)
+  ↓
+Hook2 (useEffect)
+  ↓
+Hook3 (useRef)
+```
+
+在函数组件重新执行的时候，就会顺着这条链表去“对号入座”，为每个Hook匹配正确的Hook对象。
+> 第一个 Hook → 第一个 Hook 节点 
+> 第二个 Hook → 第二个 Hook 节点 
+> ...以此类推。
+
+这也可以解释，为什么Hooks必须在组件的顶层使用，而不能在条件分支中调用。因为如何每次组件重新执行时，Hooks的数量不一致，那么fiber.memoizedState的链表就会错乱，无法正确匹配。
 
 
+# 梳理执行流程：从函数组件的执行说起
 
-# Hook是如何被存储的
+todo 需要先画图吗？？？？？
 
-
-# 从函数组件的执行说起
+接下来我们将从函数组件的执行出发，梳理Hooks是如何被创建及发挥其作用的。
 
 函数组件的本质就是一个 JS 函数，那么它们是如何被调用的呢？
 
@@ -229,3 +265,53 @@ renderWithHooks(
   renderExpirationTime // 渲染 ExpirationTime
 );
 ```
+
+其中第三个参数`Component`就是函数组件本身（即一个JS函数），将会在上述renderWithHook函数中被调用。
+
+但是调用之前，会有一些准备工作。
+
+首先根据传入的current判断当前组件是否是初次渲染，从而决定ReactCurrentDispatcher.current的指向。
+
+然后开始执行函数组件。
+
+当遇到Hooks执行的时候，就会拿到当前Hook的Hook对象（调用mountWorkInProgressHook创建或调用updateWorkInProgressHook从fiber.memoizedState中取出对应的Hook对象）。
+
+
+
+```javascript
+function mountState(
+  initialState
+){
+  // 创建Hook对象并挂载
+  const hook = mountWorkInProgressHook();
+  if (typeof initialState === 'function') {
+    // 如果 useState 第一个参数为函数，执行函数得到state
+    initialState = initialState();
+  }
+  hook.memoizedState = hook.baseState = initialState;
+  const queue = (hook.queue = {
+    pending: null,  // 带更新的
+    dispatch: null, // 负责更新函数
+    lastRenderedReducer: basicStateReducer, //用于得到最新的 state ,
+    lastRenderedState: initialState, // 最后一次得到的 state
+  });
+
+  const dispatch = (queue.dispatch = (dispatchAction.bind( // 负责更新的函数
+    null,
+    currentlyRenderingFiber,
+    queue,
+  )))
+  return [hook.memoizedState, dispatch];
+}
+```
+
+dispatchAction其实就是useState返回的数组的第二个元素。
+它的作用主要是创建update对象，并将update对象挂载到对应hook.queue上。
+至于它是如何知道要挂载到哪个hook的queue上的，答案就在于其参数上。
+
+```javascript
+function dispatchAction(fiber, queue, action) {}
+```
+
+如上源码所示，dispatchAction实际上需要接收三个参数，而我们平时调用setXXX函数时，只需传入具体的值或一个回调函数。此时我们传入的其实是第三个参数，前两个参数会在useState执行时，使用bind帮我们绑定，把对应的fiber节点和hook.queue绑定。
+这样就能确保调用setXX函数时，如何正确更新对应的state了。
