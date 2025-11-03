@@ -168,8 +168,8 @@ function resolveDispatcher() {
 }
 ```
 
-画图！！！！
-useState -> 调用 resolveDispatcher，获取 ReactCurrentDispatcher.current -> 指向 HooksDispatcherOnMount 或 HooksDispatcherOnUpdate -> 从中取出 Hook 本体
+如下图展示了 ReactCurrentDispatcher.current 的赋值及 Hooks 提取并执行的过程
+![hooks来源](../assets/images/React/hooks/hooks来源.png)
 
 ## ReactCurrentDispatcher.current 的指向
 
@@ -221,7 +221,7 @@ export type Hook = {
 - memoizedState： 保存当前Hook的状态值，不同类型的Hook保存不同的信息。（如useState中 保存 state 信息、useEffect 中 保存着 effect 对象、useRef 中保存的是 ref 对象）。
 - baseState：保存在上一次 render 中未被跳过的 state 基准值（主要用于 useState 和 useReducer 的批量更新或中断更新场景。如：在并发模式（Concurrent Mode）下，如果某个更新被中断或跳过，React 需要一个“基础状态”来重新计算后续更新。baseState 就是这个起点。）
 - baseQueue：保存那些尚未被处理（或被跳过）的更新队列。（低优先级更新被高优先级更新打断后，这些被挂起的更新会被暂存在 baseQueue 中，等到合适的时机再重新应用。）
-- queue：储存当前Hook的更新对象（以链表的方式存储）
+- queue：(一般只在useState和useReducer中发挥作用)以循环链表的方式储存当前Hook的更新对象
 - next：指向当前组件的下一个Hook对象的引用。
 
 当我们大概了解Hook的结构后，再聊聊它们是如何与对应的组件进行绑定及存储的。
