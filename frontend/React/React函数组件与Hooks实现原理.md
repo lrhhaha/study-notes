@@ -247,8 +247,7 @@ Hook3 (useRef)
 
 # 梳理执行流程：从函数组件的执行说起
 
-todo 需要先画图吗？？？？？
-
+## 函数组件执行
 接下来我们将从函数组件的执行出发，梳理Hooks是如何被创建及发挥其作用的。
 
 函数组件的本质就是一个 JS 函数，那么它们是如何被调用的呢？
@@ -268,13 +267,39 @@ renderWithHooks(
 
 其中第三个参数`Component`就是函数组件本身（即一个JS函数），将会在上述renderWithHook函数中被调用。
 
-但是调用之前，会有一些准备工作。
+整体宏观流程如下图所示：
+![函数组件执行与hooks执行](../assets/images/React/hooks/函数组件执行与Hooks执行.png)
 
-首先根据传入的current判断当前组件是否是初次渲染，从而决定ReactCurrentDispatcher.current的指向。
+整个流程可分为三个步骤：
+1. 首先根据传入的current判断当前组件是否是初次渲染，从而决定ReactCurrentDispatcher.current的指向。
+2. 执行Component函数，执行函数组件，遇到Hooks时从ReactCurrentDispatcher.current获取并执行
+3. 将ReactCurrentDispatcher.current赋值为ContextOnlyDispatcher
 
-然后开始执行函数组件。
+接下来我们将从上述三点展开阐述
 
-当遇到Hooks执行的时候，就会拿到当前Hook的Hook对象（调用mountWorkInProgressHook创建或调用updateWorkInProgressHook从fiber.memoizedState中取出对应的Hook对象）。
+第一点中对ReactCurrentDispatcher.current的赋值相信大家通过前文已经有所了解，就是通过current参数判断当前组件是否是第一次挂载，从而决定指向HooksDispatcherOnMount还是HooksDispatcherOnUpdate。
+
+第二点主要阐述各个Hooks是如何运行的，虽然各个Hooks的具体逻辑有所不同，但大致过程是相同的。这一点会在下文详细展开。
+
+第三点中提到当Component执行完毕之后，会将ReactCurrentDispatcher.current指向ContextOnlyDispatcher对象。/
+此对象就是类似HooksDispatcherOnMount和HooksDispatcherOnUpdate的Hooks集合，只不过里面的hooks大都指向同一个throwInvalidHookError函数。
+
+```javascript
+export const ContextOnlyDispatcher: Dispatcher = {
+  // ... some code ...
+  useEffect: throwInvalidHookError,
+  useState: throwInvalidHookError,
+  // ... some code ...
+};
+```
+throwInvalidHookError函数如下所示，执行时会抛出错误，以提示“hooks只能在函数组件内部使用”。/
+其作用是确保hooks只能在函数内部被调用，否则就会抛出错误。回看上面的图片会发现，当函数组件将要被调用时，会经历三个阶段`赋值ReactCurrentDispatcher.current -> 执行Component函数 -> 赋值ReactCurrentDispatcher.current`，即ReactCurrentDispatcher.current只有在函数组件被执行的期间才会正确指向HooksDispatcherOnMount或HooksDispatcherOnUpdate，其他时间都会指向ContextOnlyDispatcher。如果在函数组件之外调用hooks那么就会报错。
+
+
+## Hooks执行
+接下来我们将展开当函数组件遇到Hooks时是如何执行的。我们会使用useState和useEffect进行举例说明。
+
+
 
 
 
