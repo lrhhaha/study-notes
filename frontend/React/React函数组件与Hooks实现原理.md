@@ -206,27 +206,31 @@ export function renderWithHooks(
 }
 ```
 
-# Hook的数据结构及储存方式
-接下来我们聊一下Hooks执行之后，会生成什么样的数据结构进行存储。
-在源码中，我们可以看到执行之后的Hook会以对象的形式存储，而每个Hook对象拥有如下5个属性：
+# Hook 的数据结构及储存方式
+
+接下来我们聊一下 Hooks 执行之后，会生成什么样的数据结构进行存储。
+在源码中，我们可以看到执行之后的 Hook 会以对象的形式存储，而每个 Hook 对象拥有如下 5 个属性：
+
 ```typescript
 export type Hook = {
-  memoizedState: any,
-  baseState: any,
-  baseQueue: Update<any, any> | null,
-  queue: any,
-  next: Hook | null,
+  memoizedState: any;
+  baseState: any;
+  baseQueue: Update<any, any> | null;
+  queue: any;
+  next: Hook | null;
 };
 ```
-- memoizedState： 保存当前Hook的状态值，不同类型的Hook保存不同的信息。（如useState中 保存 state 信息、useEffect 中 保存着 effect 对象、useRef 中保存的是 ref 对象）。
+
+- memoizedState： 保存当前 Hook 的状态值，不同类型的 Hook 保存不同的信息。（如 useState 中 保存 state 信息、useEffect 中 保存着 effect 对象、useRef 中保存的是 ref 对象）。
 - baseState：保存在上一次 render 中未被跳过的 state 基准值（主要用于 useState 和 useReducer 的批量更新或中断更新场景。如：在并发模式（Concurrent Mode）下，如果某个更新被中断或跳过，React 需要一个“基础状态”来重新计算后续更新。baseState 就是这个起点。）
 - baseQueue：保存那些尚未被处理（或被跳过）的更新队列。（低优先级更新被高优先级更新打断后，这些被挂起的更新会被暂存在 baseQueue 中，等到合适的时机再重新应用。）
-- queue：(一般只在useState和useReducer中发挥作用)以循环链表的方式储存当前Hook的更新对象
-- next：指向当前组件的下一个Hook对象的引用。
+- queue：(一般只在 useState 和 useReducer 中发挥作用)以循环链表的方式储存当前 Hook 的更新对象
+- next：指向当前组件的下一个 Hook 对象的引用。
 
-当我们大概了解Hook的结构后，再聊聊它们是如何与对应的组件进行绑定及存储的。
-函数组件不像类组件那样有自己的实例，它们是以fiber节点的形式存在的。其中Fiber对象中有一个关键的`memoizedState`属性，此属性储存当前函数组件所有Hook对象所组成的链表（在类组件中，此属性储存的则是当前组件的状态）。
-当我们在一个组件中调用多个Hooks时，React会为每个Hook创建一个对象，并按顺序挂载到fiber.memoizedState中：
+当我们大概了解 Hook 的结构后，再聊聊它们是如何与对应的组件进行绑定及存储的。
+函数组件不像类组件那样有自己的实例，它们是以 fiber 节点的形式存在的。其中 Fiber 对象中有一个关键的`memoizedState`属性，此属性储存当前函数组件所有 Hook 对象所组成的链表（在类组件中，此属性储存的则是当前组件的状态）。
+当我们在一个组件中调用多个 Hooks 时，React 会为每个 Hook 创建一个对象，并按顺序挂载到 fiber.memoizedState 中：
+
 ```
 fiber.memoizedState
   ↓
@@ -237,18 +241,19 @@ Hook2 (useEffect)
 Hook3 (useRef)
 ```
 
-在函数组件重新执行的时候，就会顺着这条链表去“对号入座”，为每个Hook匹配正确的Hook对象。
-> 第一个 Hook → 第一个 Hook 节点 
-> 第二个 Hook → 第二个 Hook 节点 
+在函数组件重新执行的时候，就会顺着这条链表去“对号入座”，为每个 Hook 匹配正确的 Hook 对象。
+
+> 第一个 Hook → 第一个 Hook 节点
+> 第二个 Hook → 第二个 Hook 节点
 > ...以此类推。
 
-这也可以解释，为什么Hooks必须在组件的顶层使用，而不能在条件分支中调用。因为如何每次组件重新执行时，Hooks的数量不一致，那么fiber.memoizedState的链表就会错乱，无法正确匹配。
-
+这也可以解释，为什么 Hooks 必须在组件的顶层使用，而不能在条件分支中调用。因为如何每次组件重新执行时，Hooks 的数量不一致，那么 fiber.memoizedState 的链表就会错乱，无法正确匹配。
 
 # 梳理执行流程：从函数组件的执行说起
 
 ## 函数组件执行
-接下来我们将从函数组件的执行出发，梳理Hooks是如何被创建及发挥其作用的。
+
+接下来我们将从函数组件的执行出发，梳理 Hooks 是如何被创建及发挥其作用的。
 
 函数组件的本质就是一个 JS 函数，那么它们是如何被调用的呢？
 
@@ -265,24 +270,25 @@ renderWithHooks(
 );
 ```
 
-其中第三个参数`Component`就是函数组件本身（即一个JS函数），将会在上述renderWithHook函数中被调用。
+其中第三个参数`Component`就是函数组件本身（即一个 JS 函数），将会在上述 renderWithHook 函数中被调用。
 
 整体宏观流程如下图所示：
 ![函数组件执行与hooks执行](../assets/images/React/hooks/函数组件执行与Hooks执行.png)
 
 整个流程可分为三个步骤：
-1. 首先根据传入的current判断当前组件是否是初次渲染，从而决定ReactCurrentDispatcher.current的指向。
-2. 执行Component函数，执行函数组件，遇到Hooks时从ReactCurrentDispatcher.current获取并执行
-3. 将ReactCurrentDispatcher.current赋值为ContextOnlyDispatcher
+
+1. 首先根据传入的 current 判断当前组件是否是初次渲染，从而决定 ReactCurrentDispatcher.current 的指向。
+2. 执行 Component 函数，执行函数组件，遇到 Hooks 时从 ReactCurrentDispatcher.current 获取并执行
+3. 将 ReactCurrentDispatcher.current 赋值为 ContextOnlyDispatcher
 
 接下来我们将从上述三点展开阐述
 
-第一点中对ReactCurrentDispatcher.current的赋值相信大家通过前文已经有所了解，就是通过current参数判断当前组件是否是第一次挂载，从而决定指向HooksDispatcherOnMount还是HooksDispatcherOnUpdate。
+第一点中对 ReactCurrentDispatcher.current 的赋值相信大家通过前文已经有所了解，就是通过 current 参数判断当前组件是否是第一次挂载，从而决定指向 HooksDispatcherOnMount 还是 HooksDispatcherOnUpdate。
 
-第二点主要阐述各个Hooks是如何运行的，虽然各个Hooks的具体逻辑有所不同，但大致过程是相同的。这一点会在下文详细展开。
+第二点主要阐述各个 Hooks 是如何运行的，虽然各个 Hooks 的具体逻辑有所不同，但大致过程是相同的。这一点会在下文详细展开。
 
-第三点中提到当Component执行完毕之后，会将ReactCurrentDispatcher.current指向ContextOnlyDispatcher对象。/
-此对象就是类似HooksDispatcherOnMount和HooksDispatcherOnUpdate的Hooks集合，只不过里面的hooks大都指向同一个throwInvalidHookError函数。
+第三点中提到当 Component 执行完毕之后，会将 ReactCurrentDispatcher.current 指向 ContextOnlyDispatcher 对象。/
+此对象就是类似 HooksDispatcherOnMount 和 HooksDispatcherOnUpdate 的 Hooks 集合，只不过里面的 hooks 大都指向同一个 throwInvalidHookError 函数。
 
 ```javascript
 export const ContextOnlyDispatcher: Dispatcher = {
@@ -292,51 +298,64 @@ export const ContextOnlyDispatcher: Dispatcher = {
   // ... some code ...
 };
 ```
-throwInvalidHookError函数如下所示，执行时会抛出错误，以提示“hooks只能在函数组件内部使用”。/
-其作用是确保hooks只能在函数内部被调用，否则就会抛出错误。回看上面的图片会发现，当函数组件将要被调用时，会经历三个阶段`赋值ReactCurrentDispatcher.current -> 执行Component函数 -> 赋值ReactCurrentDispatcher.current`，即ReactCurrentDispatcher.current只有在函数组件被执行的期间才会正确指向HooksDispatcherOnMount或HooksDispatcherOnUpdate，其他时间都会指向ContextOnlyDispatcher。如果在函数组件之外调用hooks那么就会报错。
 
+throwInvalidHookError 函数如下所示，执行时会抛出错误，以提示“hooks 只能在函数组件内部使用”。/
+其作用是确保 hooks 只能在函数内部被调用，否则就会抛出错误。回看上面的图片会发现，当函数组件将要被调用时，会经历三个阶段`赋值ReactCurrentDispatcher.current -> 执行Component函数 -> 赋值ReactCurrentDispatcher.current`，即 ReactCurrentDispatcher.current 只有在函数组件被执行的期间才会正确指向 HooksDispatcherOnMount 或 HooksDispatcherOnUpdate，其他时间都会指向 ContextOnlyDispatcher。如果在函数组件之外调用 hooks 那么就会报错。
 
-## Hooks执行
-接下来我们将展开当函数组件遇到Hooks时是如何执行的。我们会使用useState和useEffect进行举例说明。
+## Hooks 执行
 
+接下来我们将展开当函数组件遇到 Hooks 时是如何执行的。我们会使用 useState 和 useEffect 进行举例说明。
 
-
-
+组件第一次渲染时，useState 的“本体”是 mountState 函数，代码如下所示
 
 ```javascript
-function mountState(
-  initialState
-){
-  // 创建Hook对象并挂载
+function mountState(initialState) {
+  // 为当前Hook创建Hook对象
   const hook = mountWorkInProgressHook();
-  if (typeof initialState === 'function') {
-    // 如果 useState 第一个参数为函数，执行函数得到state
+
+  // 当useState的参数为函数时，执行它并将返回值作为state的值
+  if (typeof initialState === "function") {
     initialState = initialState();
   }
+
+  // 将初始state的值分别挂载到hook对象的baseState和memoizedState属性上
   hook.memoizedState = hook.baseState = initialState;
+
+  // 初始化hook对象的queue属性，方便后续在其上面挂载update对象
   const queue = (hook.queue = {
-    pending: null,  // 带更新的
+    pending: null, // 带更新的
     dispatch: null, // 负责更新函数
     lastRenderedReducer: basicStateReducer, //用于得到最新的 state ,
     lastRenderedState: initialState, // 最后一次得到的 state
   });
 
-  const dispatch = (queue.dispatch = (dispatchAction.bind( // 负责更新的函数
+  // 创建setXXX函数，为其绑定当前Fiber节点及update对象链表
+  const dispatch = (queue.dispatch = dispatchAction.bind(
+    // 负责更新的函数
     null,
     currentlyRenderingFiber,
-    queue,
-  )))
+    queue
+  ));
   return [hook.memoizedState, dispatch];
 }
 ```
 
-dispatchAction其实就是useState返回的数组的第二个元素。
-它的作用主要是创建update对象，并将update对象挂载到对应hook.queue上。
-至于它是如何知道要挂载到哪个hook的queue上的，答案就在于其参数上。
+上述操作我们可以简单归纳为四个步骤：
+
+1. 创建 hook 对象
+2. 计算初始 state 并挂载保存
+3. 初始化 hook.queue 属性
+4. 创建 setXXX 函数，为其绑定当前 fiber 节点与 update 链表 queue
+
+其中第二三点
+
+dispatchAction 其实就是 useState 返回的数组的第二个元素。
+它的作用主要是创建 update 对象，并将 update 对象挂载到对应 hook.queue 上。
+至于它是如何知道要挂载到哪个 hook 的 queue 上的，答案就在于其参数上。
 
 ```javascript
 function dispatchAction(fiber, queue, action) {}
 ```
 
-如上源码所示，dispatchAction实际上需要接收三个参数，而我们平时调用setXXX函数时，只需传入具体的值或一个回调函数。此时我们传入的其实是第三个参数，前两个参数会在useState执行时，使用bind帮我们绑定，把对应的fiber节点和hook.queue绑定。
-这样就能确保调用setXX函数时，如何正确更新对应的state了。
+如上源码所示，dispatchAction 实际上需要接收三个参数，而我们平时调用 setXXX 函数时，只需传入具体的值或一个回调函数。此时我们传入的其实是第三个参数，前两个参数会在 useState 执行时，使用 bind 帮我们绑定，把对应的 fiber 节点和 hook.queue 绑定。
+这样就能确保调用 setXX 函数时，如何正确更新对应的 state 了。
