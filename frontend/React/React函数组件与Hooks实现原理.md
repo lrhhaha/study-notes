@@ -306,6 +306,8 @@ throwInvalidHookError 函数如下所示，执行时会抛出错误，以提示�
 
 接下来我们将展开当函数组件遇到 Hooks 时是如何执行的。我们会使用 useState 和 useEffect 进行举例说明。
 
+### mountState
+
 组件第一次渲染时，useState 的“本体”是 mountState 函数，代码如下所示
 
 ```javascript
@@ -347,15 +349,91 @@ function mountState(initialState) {
 3. 初始化 hook.queue 属性
 4. 创建 setXXX 函数，为其绑定当前 fiber 节点与 update 链表 queue
 
-其中第二三点
+第一点的创建 hook 对象，需要使用函数 mountWorkInProgressHook 生成
 
-dispatchAction 其实就是 useState 返回的数组的第二个元素。
-它的作用主要是创建 update 对象，并将 update 对象挂载到对应 hook.queue 上。
+```javascript
+const hook: Hook = {
+  memoizedState: null, // useState中 保存 state信息 ｜ useEffect 中 保存着 effect 对象 ｜ useMemo 中 保存的是缓存的值和deps ｜ useRef中保存的是ref 对象
+  baseState: null,
+  baseQueue: null,
+  queue: null,
+  next: null, // 指向下一个hook对象
+};
+// 判断当前hook是否是当前函数组件的第一个hook
+if (workInProgressHook === null) {
+  // 将hook对象直接挂载到当前fiber.memoizedState
+  currentlyRenderingFiber.memoizedState = workInProgressHook = hook;
+} else {
+  // 移动指针保存当前hook对象（hook对象在fiber.memoizedState上以链表方式存储）
+  workInProgressHook = workInProgressHook.next = hook;
+}
+// 返回当前hook对象的引用
+return workInProgressHook;
+```
+
+其中第二三点比较容易理解，分别是挂载 hook 对象的 memoizedState 和 queue 属性（）
+
+第四点会创建 dispatch 函数，此函数其实就是 useState 返回的数组的第二个元素（即 setXXX 函数）。
+
+而 dispatch 函数实际上就是 dispatchAction 函数调用 bind 绑定了两个实参后返回的新函数。/
+接下来我们看看这个 dispatchAction 究竟做了什么。
+
+它的作用可简单归纳为三个步骤：
+
+1. 创建 update 对象，
+2. 将 update 对象挂载至 hook.queue 上
+3. 执行调度函数，调度更新的执行。
+
 至于它是如何知道要挂载到哪个 hook 的 queue 上的，答案就在于其参数上。
 
 ```javascript
-function dispatchAction(fiber, queue, action) {}
+function dispatchAction(fiber, queue, action) {
+  // 创建update对象
+  const update = {
+    expirationTime,
+    suspenseConfig,
+    action,
+    eagerReducer: null,
+    eagerState: null,
+    next: null,
+  };
+  // 取出hook.queue.pending，指向
+  const pending = queue.pending;
+
+  if (pending === null) {
+    // 证明第一次更新
+    update.next = update;
+  } else {
+    // 不是第一次更新
+    update.next = pending.next;
+    pending.next = update;
+  }
+
+  // 调度更新操作（并非同步执行，具体调度逻辑由 scheduler 执行）
+  scheduleUpdateOnFiber(fiber, expirationTime);
+}
 ```
 
 如上源码所示，dispatchAction 实际上需要接收三个参数，而我们平时调用 setXXX 函数时，只需传入具体的值或一个回调函数。此时我们传入的其实是第三个参数，前两个参数会在 useState 执行时，使用 bind 帮我们绑定，把对应的 fiber 节点和 hook.queue 绑定。
 这样就能确保调用 setXX 函数时，如何正确更新对应的 state 了。
+
+
+### mountEffect
+
+当组件挂载时，useEffect的本体是mountEffect函数。
+
+```javascript
+function mountEffect(
+  create,
+  deps,
+) {
+  const hook = mountWorkInProgressHook();
+  const nextDeps = deps === undefined ? null : deps;
+  hook.memoizedState = pushEffect(
+    HookHasEffect | hookEffectTag, 
+    create, // useEffect 第一次参数，就是副作用函数
+    undefined,
+    nextDeps, // useEffect 第二次参数，deps
+  );
+}
+```
