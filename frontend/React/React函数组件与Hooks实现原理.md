@@ -432,9 +432,9 @@ function updateWorkInProgressHook(): Hook {
 
 接下来会以常用的 useState 和 useEffect 进行举例说明它们在组件首次渲染和更新时发生了什么。
 
-#### 组件首次渲染
+#### useState
 
-##### useState -> mountState
+##### 函数组件首次渲染： mountState
 
 组件第一次渲染时，useState 的“本体”是 mountState 函数，代码如下所示
 
@@ -483,15 +483,15 @@ function mountState(initialState) {
 3. 初始化 hook.queue 属性
 4. 创建 setXXX 函数，为其绑定当前 fiber 节点与 update 链表 queue
 
-第一点的创建 hook 对象，需要使用前文提到的函数 mountWorkInProgressHook。 
+第一点的创建 hook 对象，需要使用前文提到的函数 mountWorkInProgressHook。
 
-第二点即是根据参数类型，通过计算或直接获取state值，并挂载到hook.memoizedState上。
+第二点即是根据参数类型，通过计算或直接获取 state 值，并挂载到 hook.memoizedState 上。
 
-第三点则是初始化hook.queue属性，用于后续保存update对象链表等信息（此queue属性一般只在useState和useReducer的hook对象中被使用）
+第三点则是初始化 hook.queue 属性，用于后续保存 update 对象链表等信息（此 queue 属性一般只在 useState 和 useReducer 的 hook 对象中被使用）
 
 第四点会创建 dispatch 函数，此函数其实就是 useState 返回的数组的第二个元素（即 setXXX 函数）。
 
-前三个步骤都以相对容易理解的，接下来需要对第四步的dispatch函数展开聊聊。
+前三个步骤都以相对容易理解的，接下来需要对第四步的 dispatch 函数展开聊聊。
 
 而 dispatch 函数实际上就是 dispatchAction 函数调用 bind 绑定了两个实参后返回的新函数。/
 接下来我们看看这个 dispatchAction 究竟做了什么。
@@ -504,9 +504,14 @@ function mountState(initialState) {
 
 至于它是如何知道要挂载到哪个 hook 的 queue 上的，答案就在于其参数上。
 
-如下是精简版的dispatchAction代码
+如下是精简版的 dispatchAction 代码
+
 ```javascript
-function dispatchAction(fiber, queue, action) {
+function dispatchAction(
+  fiber, 
+  queue, 
+  action // setXXX的参数，可为函数或普通值
+) {
   // 创建update对象
   const update = {
     expirationTime,
@@ -527,6 +532,8 @@ function dispatchAction(fiber, queue, action) {
     update.next = pending.next;
     pending.next = update;
   }
+   
+  // todo：计算前后状态是否相等，判断是否出发render
 
   // 调度更新操作（并非同步执行，具体调度逻辑由 scheduler 执行）
   scheduleUpdateOnFiber(fiber, expirationTime);
@@ -536,51 +543,92 @@ function dispatchAction(fiber, queue, action) {
 如上源码所示，dispatchAction 实际上需要接收三个参数，而我们平时调用 setXXX 函数时，只需传入具体的值或一个回调函数。此时我们传入的其实是第三个参数，前两个参数会在 useState 执行时，使用 bind 帮我们绑定，把对应的 fiber 节点和 hook.queue 绑定。
 这样就能确保调用 setXX 函数时，如何正确更新对应的 state 了。
 
-##### useEffect -> mountEffect
+##### 函数组件更新：updateState
+
+1. 为什么 updateState 会调用 updateReducer？
+因为 useState 用固定的 basicStateReducer 复用 useReducer 的通用实现，保证一致的更新/合并/优先级/优化行为。
+
+2. 如何确定最终值
+读取hook.queue属性，遍历update对象，拿到其action，交给basicStateReducer计算处最新值（可作为下一个）。
+
+遍历update链条，得到最终值。
+
+3. useState 如何保存状态？
+
+```javascript
+// 最基础的reducer，action是**普通值**或**接收当前值并返回最新值的函数**（即setXXX的参数）
+function basicStateReducer(prevState, action) {
+  return typeof action === 'function' ? action(prevState) : action;
+}
+```
+
+
+#### useEffect
+
+##### 函数组件首次渲染： mountEffect
 
 当组件挂载时，useEffect 的本体是 mountEffect 函数。
 
 ```javascript
-function mountEffect(create, deps) {
+function mountEffect(
+  create, // useEffect 第一个参数，副作用函数
+  deps // useEffect 第二个参数，依赖项数组
+) {
+  // mountEffect可简单理解为执行了mountEffectImpl函数
+  return mountEffectImpl(
+    PassiveEffect | PassiveStaticEffect,
+    HookPassive,
+    create,
+    deps
+  );
+}
+
+function mountEffectImpl(fiberFlags, hookFlags, create, deps) {
   const hook = mountWorkInProgressHook();
   const nextDeps = deps === undefined ? null : deps;
+  currentlyRenderingFiber.flags |= fiberFlags;
   hook.memoizedState = pushEffect(
-    HookHasEffect | hookEffectTag,
-    create, // useEffect 第一个参数，就是副作用函数
+    HookHasEffect | hookFlags,
+    create,
     undefined,
-    nextDeps // useEffect 第二个参数，deps
+    nextDeps
   );
 }
 ```
-此函数先调用mountWorkInProgressHook创建了当前hook的hook对象。
 
-然后将传入的副作用函数和依赖数组作为参数传递给pushEffect函数并调用。
+此函数先调用 mountWorkInProgressHook 创建了当前 hook 的 hook 对象。
 
-pushEffect的返回值是当前useEffect的effect对象，并将其挂载至hook.memoizedState上。（不同的hook的memoizedState记录着不同信息，useState记录当前state的值，useEffect记录当前的effect对象）。
+然后将传入的副作用函数和依赖数组作为参数传递给 pushEffect 函数并调用。
 
-至于pushEffect的具体作用，可以归纳为两点：
-1. 创建effect对象（记录副作用函数和依赖数组等信息）
-2. 将当前effect对象作为链表节点，挂载到workInProgress fiber节点的updateQueue属性的链表上。（即当前effect对象既单独保存在hook.memoizedState上，又会与其他useEffect的effect对象以链表的形式存储的fiber.updateQueue上）
+pushEffect 的返回值是当前 useEffect 的 effect 对象，并将其挂载至 hook.memoizedState 上。（不同的 hook 的 memoizedState 记录着不同信息，useState 记录当前 state 的值，useEffect 记录当前的 effect 对象）。
+
+至于 pushEffect 的具体作用，可以归纳为两点：
+
+1. 创建 effect 对象（记录副作用函数和依赖数组等信息）
+2. 将当前 effect 对象作为链表节点，挂载到 workInProgress fiber 节点的 updateQueue 属性的链表上。（即当前 effect 对象既单独保存在 hook.memoizedState 上，又会与其他 useEffect 的 effect 对象以链表的形式存储的 fiber.updateQueue 上）
 
 ```javascript
 function pushEffect(tag, create, destroy, deps) {
+  // effect 副作用对象
   const effect: Effect = {
-    tag,
-    create,
-    destroy,
-    deps,
-    // Circular
+    tag, // 标识 effect 类型与是否需要执行
+    create, // 副作用函数
+    destroy, // cleanup函数
+    deps, // 依赖项数组
     next: (null: any),
   };
 
   // 获取当前workInProgress节点的updateQueue属性
-  let componentUpdateQueue: null | FunctionComponentUpdateQueue = (currentlyRenderingFiber.updateQueue: any);
+  let componentUpdateQueue: null | FunctionComponentUpdateQueue =
+    (currentlyRenderingFiber.updateQueue: any);
 
-  if (componentUpdateQueue === null) { // 当fiber的effect链表为空，则此effect是第一个effect，初始化fiber.updateQueue
+  if (componentUpdateQueue === null) {
+    // 当fiber的effect链表为空，则此effect是第一个effect，初始化fiber.updateQueue
     componentUpdateQueue = createFunctionComponentUpdateQueue();
     currentlyRenderingFiber.updateQueue = (componentUpdateQueue: any);
     componentUpdateQueue.lastEffect = effect.next = effect;
-  } else { // 如前面已有effect，则作为链表节点插入fiber.updateQueue中
+  } else {
+    // 如前面已有effect，则作为链表节点插入fiber.updateQueue中
     const lastEffect = componentUpdateQueue.lastEffect;
     if (lastEffect === null) {
       componentUpdateQueue.lastEffect = effect.next = effect;
@@ -594,3 +642,75 @@ function pushEffect(tag, create, destroy, deps) {
   return effect;
 }
 ```
+
+需要注意的是 fiber.updateQueue 中，是以环形链表的方式存储，并且其 lastEffect 属性指向最后一个 effect 对象。
+假设我们在一个函数组件中这么写：
+
+```javascript
+useEffect(() => {
+  console.log(1);
+}, [props.a]);
+useEffect(() => {
+  console.log(2);
+}, []);
+useEffect(() => {
+  console.log(3);
+}, []);
+```
+
+那么此函数组件对应的 fiber 节点如下所示
+todo：画图
+![alt text](image.png)
+
+##### 函数组件更新：updateEffect
+
+在组件更新重新渲染时，useEffect 的“本体”是 updateEffect 函数。
+
+updateEffect 的逻辑是根据判断依赖项数组中的依赖项是否更新：
+
+- 如果没有更新则代表当前副作用无需执行，调用 pushEffect 函数将原 effect 对象挂载到 fiber.updateQueue 链表上并赋值给 hook.memoizedState。
+- 如果依赖项发生了更新，则需要更新 effect 对象（主要更新 effect.tag 属性，将其标记为当前副作用需要执行），然后调用 pushEffect 函数挂载到 fiber.updateQueue 链表，并且更新 hook.memoizedState 属性。
+
+```javascript
+function updateEffect(
+  create, // 副作用函数
+  deps // 依赖项数组
+) {
+  // updateEffect 只调用了updateEffectImpl函数
+  return updateEffectImpl(PassiveEffect, HookPassive, create, deps);
+}
+
+function updateEffectImpl(fiberFlags, hookFlags, create, deps) {
+  // 获取当前hook的hook对象。
+  const hook = updateWorkInProgressHook();
+  const nextDeps = deps === undefined ? null : deps;
+  let destroy = undefined;
+
+  if (currentHook !== null) {
+    const prevEffect = currentHook.memoizedState;
+    destroy = prevEffect.destroy;
+    if (nextDeps !== null) {
+      // 依赖项不为空，比较依赖项是否改变
+      const prevDeps = prevEffect.deps;
+      if (areHookInputsEqual(nextDeps, prevDeps)) {
+        // 依赖项没有发生改变，创建原effect对象副本
+        hook.memoizedState = pushEffect(hookFlags, create, destroy, nextDeps);
+        return;
+      }
+    }
+  }
+
+  currentlyRenderingFiber.flags |= fiberFlags;
+  // 依赖项发生改变，标记effect.tag为需要执行副作用
+  hook.memoizedState = pushEffect(
+    HookHasEffect | hookFlags, // effect.tag参数
+    create,
+    destroy,
+    nextDeps
+  );
+}
+```
+
+总结一下：其实 mountEffect 和 updateEffect 的执行时间在 React 的 render 阶段。
+它们的目的在于创建、更新 effect 对象，并将其挂载到 hook.memoizedState 和 fiber.updateQueue 链表上。而不会执行执行副作用函数和 cleanup 函数。/
+在 commit 阶段，React 会遍历 fiber.updateQueue 链表，根据每个 effect 的 tag 属性判断是否需要执行清理函数和副作用函数。从而完成整个 useEffect 的执行流程。

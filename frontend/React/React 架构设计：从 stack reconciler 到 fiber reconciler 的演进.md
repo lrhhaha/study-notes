@@ -249,7 +249,8 @@ Fiber 节点通过以下三个属性形成链式树状结构
 
 ### memoizedState
 
-上一次渲染时使用的 state
+- 类组件：保存上次渲染时使用的 state
+- 函数组件：保存 hooks 链表
 
 ### pendingProps
 
@@ -257,7 +258,8 @@ Fiber 节点通过以下三个属性形成链式树状结构
 
 ### updateQueue
 
-存储更新对象的队列
+- 类组件：存放 update 对象链表
+- 函数组件：存放 effect 对象链表（副作用链表）
 
 ## 副作用相关属性
 
