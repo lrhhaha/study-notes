@@ -208,6 +208,8 @@ export function renderWithHooks(
 
 # Hook 的数据结构及储存方式
 
+## Hook 的数据结构
+
 接下来我们聊一下 Hooks 执行之后，会生成什么样的数据结构进行存储。
 在源码中，我们可以看到执行之后的 Hook 会以对象的形式存储，而每个 Hook 对象拥有如下 5 个属性：
 
@@ -226,6 +228,8 @@ export type Hook = {
 - baseQueue：保存那些尚未被处理（或被跳过）的更新队列。（低优先级更新被高优先级更新打断后，这些被挂起的更新会被暂存在 baseQueue 中，等到合适的时机再重新应用。）
 - queue：(一般只在 useState 和 useReducer 中发挥作用)以循环链表的方式储存当前 Hook 的更新对象
 - next：指向当前组件的下一个 Hook 对象的引用。
+
+## Hook 对象在 React 的存储方式
 
 当我们大概了解 Hook 的结构后，再聊聊它们是如何与对应的组件进行绑定及存储的。
 函数组件不像类组件那样有自己的实例，它们是以 fiber 节点的形式存在的。其中 Fiber 对象中有一个关键的`memoizedState`属性，此属性储存当前函数组件所有 Hook 对象所组成的链表（在类组件中，此属性储存的则是当前组件的状态）。
@@ -304,16 +308,142 @@ throwInvalidHookError 函数如下所示，执行时会抛出错误，以提示�
 
 ## Hooks 执行
 
-接下来我们将展开当函数组件遇到 Hooks 时是如何执行的。我们会使用 useState 和 useEffect 进行举例说明。
+接下来我们将展开当函数组件遇到 Hooks 时是如何执行的。
 
-### mountState
+Hooks 的执行流程可以宏观地分为两个阶段：
+
+1. 获取 Hook 对象
+2. 执行 Hook 个性化逻辑
+
+如上步骤所示，每个 Hook 执行之前都会拿到当前的 Hook 对象，这一步的逻辑是统一的，后续才是根据不同类型的 Hook 执行不同的逻辑。
+
+### 获取 hook 对象
+
+那么接下来我们将展开聊聊 Hook 执行时是如何获取当前的 Hook 对象的。
+
+#### 首次渲染 - mountWorkInProgressHook
+
+对于第一次渲染的组件而言，它们获取每个 Hook 对象的方式是调用 mountWorkInProgressHook 函数，此函数会创建一个全新的 hook 对象，并将其挂载到当前组件 fiber 对象的 memoizedState 链表上。/
+
+```javascript
+function mountWorkInProgressHook() {
+  const hook: Hook = {
+    memoizedState: null, // useState中 保存 state信息 ｜ useEffect 中 保存着 effect 对象 ｜ useMemo 中 保存的是缓存的值和deps ｜ useRef中保存的是ref 对象
+    baseState: null,
+    baseQueue: null,
+    queue: null,
+    next: null, // 指向下一个hook对象
+  };
+  // 判断当前hook是否是当前函数组件的第一个hook
+  if (workInProgressHook === null) {
+    // 将hook对象直接挂载到当前fiber.memoizedState
+    currentlyRenderingFiber.memoizedState = workInProgressHook = hook;
+  } else {
+    // 移动指针保存当前hook对象（hook对象在fiber.memoizedState上以链表方式存储）
+    workInProgressHook = workInProgressHook.next = hook;
+  }
+  // 返回当前hook对象的引用
+  return workInProgressHook;
+}
+```
+
+#### 组件更新 - updateWorkInProgressHook
+
+对于是 update 时重新渲染的组件，它们的各个 Hook 已经拥有了各自的 hook 对象并挂载到 currnet fiber 的 memoizedState 链表上，所以现在我们需要根据 currnet fiber 树中的 hooks 链表生成当前渲染的 workInProgress fiber 树的 hooks 链表，使组件更新前后 hooks 链表结构一致。
+
+具体做法是维护两个指针辅助 workInProgress fiber 树的 hooks 链表：
+
+- currentHook：指向 current Fiber 树（上次渲染）的 Hook 链表当前位置
+- workInProgressHook：指向 workInProgress Fiber 树（本次渲染）已构建链表的末尾
+
+```javascript
+function updateWorkInProgressHook(): Hook {
+  let nextCurrentHook: null | Hook;
+
+  if (currentHook === null) {
+    // 说明这是当前组件的第一个 Hook
+    const current = currentlyRenderingFiber.alternate; // 获取 current fiber 树的引用
+    if (current !== null) {
+      // 指向 current fiber 树 的 memoizedState（即Hook 链表的链头）
+      nextCurrentHook = current.memoizedState;
+    } else {
+      // 若不存current fiber 树（可能处于首轮挂载过程中的特殊重渲染分支），则无 current hooks链可对齐
+      nextCurrentHook = null;
+    }
+  } else {
+    // 常规情况：沿着 current hook 链推进到下一个 Hook
+    nextCurrentHook = currentHook.next;
+  }
+
+  // 计算 workInProgress 链表中下一个应当使用/复用的节点
+  let nextWorkInProgressHook: null | Hook;
+  if (workInProgressHook === null) {
+    // 若还未创建任何 workInProgress Hook 节点，则从 fiber.memoizedState（即链头）开始
+    nextWorkInProgressHook = currentlyRenderingFiber.memoizedState;
+  } else {
+    // 否则从已构建的 workInProgress 链表的下一个节点尝试复用
+    nextWorkInProgressHook = workInProgressHook.next;
+  }
+
+  if (nextWorkInProgressHook !== null) {
+    // 情况 1：已经存在对应的 workInProgress Hook，直接复用
+    workInProgressHook = nextWorkInProgressHook;
+    nextWorkInProgressHook = workInProgressHook.next;
+
+    currentHook = nextCurrentHook;
+  } else {
+    // 情况 2：没有可复用的 workInProgress hook 节点，需要从 currentHook 克隆一个新的 Hook 节点
+    if (nextCurrentHook === null) {
+      // 若连 current 的对应节点也没有，说明当前渲染调用的 Hook 数量“超过了上一轮的数量”
+      // 违反“Hook 调用顺序与数量在渲染间保持一致”的约束，直接抛错
+      throw new Error("Rendered more hooks than during the previous render.");
+    }
+
+    // 将 current 指针推进到下一个
+    currentHook = nextCurrentHook;
+
+    // 基于 currentHook 克隆一个新的 Hook 节点到 workInProgress 的hooks 链中
+    const newHook: Hook = {
+      memoizedState: currentHook.memoizedState,
+      baseState: currentHook.baseState,
+      baseQueue: currentHook.baseQueue,
+      queue: currentHook.queue,
+      next: null,
+    };
+
+    if (workInProgressHook === null) {
+      // 若这是本轮渲染的第一个 Hook
+      // 将 fiber.memoizedState 指向该新 Hook，作为 workInProgress 树的hook 链头
+      currentlyRenderingFiber.memoizedState = workInProgressHook = newHook;
+    } else {
+      // 挂载到 workInProgress 树hooks链表的末尾，并推进指针
+      workInProgressHook = workInProgressHook.next = newHook;
+    }
+  }
+
+  // 返回本次对应的 wip Hook 节点。
+  return workInProgressHook;
+}
+```
+
+### 执行各个 hook 具体逻辑
+
+当执行了上述的 mountWorkInProgressHook 或 updateWorkInProgressHook 函数获取到 hook 对象之后，就正式开始执行各个 hook 的具体逻辑了。
+
+接下来会以常用的 useState 和 useEffect 进行举例说明它们在组件首次渲染和更新时发生了什么。
+
+#### 组件首次渲染
+
+##### useState -> mountState
 
 组件第一次渲染时，useState 的“本体”是 mountState 函数，代码如下所示
 
 ```javascript
 function mountState(initialState) {
-  // 为当前Hook创建Hook对象
+  // 步骤一：为当前Hook创建Hook对象并挂载
   const hook = mountWorkInProgressHook();
+
+  // 步骤二：计算初始 state 并挂载保存
 
   // 当useState的参数为函数时，执行它并将返回值作为state的值
   if (typeof initialState === "function") {
@@ -323,6 +453,8 @@ function mountState(initialState) {
   // 将初始state的值分别挂载到hook对象的baseState和memoizedState属性上
   hook.memoizedState = hook.baseState = initialState;
 
+  // 步骤三：初始化 hook.queue 属性
+
   // 初始化hook对象的queue属性，方便后续在其上面挂载update对象
   const queue = (hook.queue = {
     pending: null, // 带更新的
@@ -330,6 +462,8 @@ function mountState(initialState) {
     lastRenderedReducer: basicStateReducer, //用于得到最新的 state ,
     lastRenderedState: initialState, // 最后一次得到的 state
   });
+
+  // 步骤四：创建 setXXX 函数
 
   // 创建setXXX函数，为其绑定当前Fiber节点及update对象链表
   const dispatch = (queue.dispatch = dispatchAction.bind(
@@ -344,36 +478,20 @@ function mountState(initialState) {
 
 上述操作我们可以简单归纳为四个步骤：
 
-1. 创建 hook 对象
+1. hook 对象创建与挂载
 2. 计算初始 state 并挂载保存
 3. 初始化 hook.queue 属性
 4. 创建 setXXX 函数，为其绑定当前 fiber 节点与 update 链表 queue
 
-第一点的创建 hook 对象，需要使用函数 mountWorkInProgressHook 生成
+第一点的创建 hook 对象，需要使用前文提到的函数 mountWorkInProgressHook。 
 
-```javascript
-const hook: Hook = {
-  memoizedState: null, // useState中 保存 state信息 ｜ useEffect 中 保存着 effect 对象 ｜ useMemo 中 保存的是缓存的值和deps ｜ useRef中保存的是ref 对象
-  baseState: null,
-  baseQueue: null,
-  queue: null,
-  next: null, // 指向下一个hook对象
-};
-// 判断当前hook是否是当前函数组件的第一个hook
-if (workInProgressHook === null) {
-  // 将hook对象直接挂载到当前fiber.memoizedState
-  currentlyRenderingFiber.memoizedState = workInProgressHook = hook;
-} else {
-  // 移动指针保存当前hook对象（hook对象在fiber.memoizedState上以链表方式存储）
-  workInProgressHook = workInProgressHook.next = hook;
-}
-// 返回当前hook对象的引用
-return workInProgressHook;
-```
+第二点即是根据参数类型，通过计算或直接获取state值，并挂载到hook.memoizedState上。
 
-其中第二三点比较容易理解，分别是挂载 hook 对象的 memoizedState 和 queue 属性（）
+第三点则是初始化hook.queue属性，用于后续保存update对象链表等信息（此queue属性一般只在useState和useReducer的hook对象中被使用）
 
 第四点会创建 dispatch 函数，此函数其实就是 useState 返回的数组的第二个元素（即 setXXX 函数）。
+
+前三个步骤都以相对容易理解的，接下来需要对第四步的dispatch函数展开聊聊。
 
 而 dispatch 函数实际上就是 dispatchAction 函数调用 bind 绑定了两个实参后返回的新函数。/
 接下来我们看看这个 dispatchAction 究竟做了什么。
@@ -386,6 +504,7 @@ return workInProgressHook;
 
 至于它是如何知道要挂载到哪个 hook 的 queue 上的，答案就在于其参数上。
 
+如下是精简版的dispatchAction代码
 ```javascript
 function dispatchAction(fiber, queue, action) {
   // 创建update对象
@@ -417,23 +536,61 @@ function dispatchAction(fiber, queue, action) {
 如上源码所示，dispatchAction 实际上需要接收三个参数，而我们平时调用 setXXX 函数时，只需传入具体的值或一个回调函数。此时我们传入的其实是第三个参数，前两个参数会在 useState 执行时，使用 bind 帮我们绑定，把对应的 fiber 节点和 hook.queue 绑定。
 这样就能确保调用 setXX 函数时，如何正确更新对应的 state 了。
 
+##### useEffect -> mountEffect
 
-### mountEffect
-
-当组件挂载时，useEffect的本体是mountEffect函数。
+当组件挂载时，useEffect 的本体是 mountEffect 函数。
 
 ```javascript
-function mountEffect(
-  create,
-  deps,
-) {
+function mountEffect(create, deps) {
   const hook = mountWorkInProgressHook();
   const nextDeps = deps === undefined ? null : deps;
   hook.memoizedState = pushEffect(
-    HookHasEffect | hookEffectTag, 
-    create, // useEffect 第一次参数，就是副作用函数
+    HookHasEffect | hookEffectTag,
+    create, // useEffect 第一个参数，就是副作用函数
     undefined,
-    nextDeps, // useEffect 第二次参数，deps
+    nextDeps // useEffect 第二个参数，deps
   );
+}
+```
+此函数先调用mountWorkInProgressHook创建了当前hook的hook对象。
+
+然后将传入的副作用函数和依赖数组作为参数传递给pushEffect函数并调用。
+
+pushEffect的返回值是当前useEffect的effect对象，并将其挂载至hook.memoizedState上。（不同的hook的memoizedState记录着不同信息，useState记录当前state的值，useEffect记录当前的effect对象）。
+
+至于pushEffect的具体作用，可以归纳为两点：
+1. 创建effect对象（记录副作用函数和依赖数组等信息）
+2. 将当前effect对象作为链表节点，挂载到workInProgress fiber节点的updateQueue属性的链表上。（即当前effect对象既单独保存在hook.memoizedState上，又会与其他useEffect的effect对象以链表的形式存储的fiber.updateQueue上）
+
+```javascript
+function pushEffect(tag, create, destroy, deps) {
+  const effect: Effect = {
+    tag,
+    create,
+    destroy,
+    deps,
+    // Circular
+    next: (null: any),
+  };
+
+  // 获取当前workInProgress节点的updateQueue属性
+  let componentUpdateQueue: null | FunctionComponentUpdateQueue = (currentlyRenderingFiber.updateQueue: any);
+
+  if (componentUpdateQueue === null) { // 当fiber的effect链表为空，则此effect是第一个effect，初始化fiber.updateQueue
+    componentUpdateQueue = createFunctionComponentUpdateQueue();
+    currentlyRenderingFiber.updateQueue = (componentUpdateQueue: any);
+    componentUpdateQueue.lastEffect = effect.next = effect;
+  } else { // 如前面已有effect，则作为链表节点插入fiber.updateQueue中
+    const lastEffect = componentUpdateQueue.lastEffect;
+    if (lastEffect === null) {
+      componentUpdateQueue.lastEffect = effect.next = effect;
+    } else {
+      const firstEffect = lastEffect.next;
+      lastEffect.next = effect;
+      effect.next = firstEffect;
+      componentUpdateQueue.lastEffect = effect;
+    }
+  }
+  return effect;
 }
 ```
