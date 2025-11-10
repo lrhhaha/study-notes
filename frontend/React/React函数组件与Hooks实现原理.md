@@ -329,8 +329,8 @@ Hooks 的执行流程可以宏观地分为两个阶段：
 function mountWorkInProgressHook() {
   const hook: Hook = {
     memoizedState: null, // useState中 保存 state信息 ｜ useEffect 中 保存着 effect 对象 ｜ useMemo 中 保存的是缓存的值和deps ｜ useRef中保存的是ref 对象
-    baseState: null,
-    baseQueue: null,
+    baseState: null, // 跳过更新后的基础状态
+    baseQueue: null, // 跳过更新后的更新对象队列
     queue: null,
     next: null, // 指向下一个hook对象
   };
@@ -544,6 +544,18 @@ function dispatchAction(
 这样就能确保调用 setXX 函数时，如何正确更新对应的 state 了。
 
 ##### 函数组件更新：updateState
+
+首先我们从宏观上理解为什么useState能帮助函数组件记忆并计算出最新state值。
+
+useState在函数组件更新时，执行的“本体”的updateState函数，从宏观上它会执行如下操作，计算出最新的state，储存并返回出来供函数组件使用：
+1. 取出基础值：updateState从hook.baseState取出上一次的state值（因可能存在渲染中断的情况，baseState记录上一次跳过更新后的基础状态，而hook.memoizedState记录的是上次渲染结果的状态）。
+2. 获取更新链表：使用hook.baseQueue与hook.queue.pending合并（并按lanes优先级过滤）得出最终要更新的update链表。
+3. 根据baseState及最终的update链表，依次计算，并得出state的最终值，写到hook.memoizedState和hook.baseState上。
+3. 将最终值返回，供函数组件使用。
+
+
+
+底层：updateState调用的是updateReducer
 
 1. 为什么 updateState 会调用 updateReducer？
 因为 useState 用固定的 basicStateReducer 复用 useReducer 的通用实现，保证一致的更新/合并/优先级/优化行为。
