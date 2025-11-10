@@ -331,7 +331,7 @@ function mountWorkInProgressHook() {
     memoizedState: null, // useState中 保存 state信息 ｜ useEffect 中 保存着 effect 对象 ｜ useMemo 中 保存的是缓存的值和deps ｜ useRef中保存的是ref 对象
     baseState: null, // 跳过更新后的基础状态
     baseQueue: null, // 跳过更新后的更新对象队列
-    queue: null,
+    queue: null, //
     next: null, // 指向下一个hook对象
   };
   // 判断当前hook是否是当前函数组件的第一个hook
@@ -508,8 +508,8 @@ function mountState(initialState) {
 
 ```javascript
 function dispatchAction(
-  fiber, 
-  queue, 
+  fiber,
+  queue,
   action // setXXX的参数，可为函数或普通值
 ) {
   // 创建update对象
@@ -532,8 +532,9 @@ function dispatchAction(
     update.next = pending.next;
     pending.next = update;
   }
-   
+
   // todo：计算前后状态是否相等，判断是否出发render
+  // eager state 优化：在 dispatch（事件阶段）时，React 可能用 lastRenderedReducer(state, action)提前算一次。如果结果与当前已渲染状态相同，可能直接触发“无变化”短路，避免一次无谓渲染。
 
   // 调度更新操作（并非同步执行，具体调度逻辑由 scheduler 执行）
   scheduleUpdateOnFiber(fiber, expirationTime);
@@ -545,35 +546,68 @@ function dispatchAction(
 
 ##### 函数组件更新：updateState
 
-首先我们从宏观上理解为什么useState能帮助函数组件记忆并计算出最新state值。
-
-useState在函数组件更新时，执行的“本体”的updateState函数，从宏观上它会执行如下操作，计算出最新的state，储存并返回出来供函数组件使用：
-1. 取出基础值：updateState从hook.baseState取出上一次的state值（因可能存在渲染中断的情况，baseState记录上一次跳过更新后的基础状态，而hook.memoizedState记录的是上次渲染结果的状态）。
-2. 获取更新链表：使用hook.baseQueue与hook.queue.pending合并（并按lanes优先级过滤）得出最终要更新的update链表。
-3. 根据baseState及最终的update链表，依次计算，并得出state的最终值，写到hook.memoizedState和hook.baseState上。
-3. 将最终值返回，供函数组件使用。
-
-
-
-底层：updateState调用的是updateReducer
-
-1. 为什么 updateState 会调用 updateReducer？
-因为 useState 用固定的 basicStateReducer 复用 useReducer 的通用实现，保证一致的更新/合并/优先级/优化行为。
-
-2. 如何确定最终值
-读取hook.queue属性，遍历update对象，拿到其action，交给basicStateReducer计算处最新值（可作为下一个）。
-
-遍历update链条，得到最终值。
-
-3. useState 如何保存状态？
+在函数组件更新时，useState 的“本体”是 updateState 函数，它的源码如下所示
 
 ```javascript
-// 最基础的reducer，action是**普通值**或**接收当前值并返回最新值的函数**（即setXXX的参数）
-function basicStateReducer(prevState, action) {
-  return typeof action === 'function' ? action(prevState) : action;
+function updateState(initialState) {
+  //  实质上是调用 useReducer 的 updateReducer函数
+  return updateReducer(basicStateReducer, initialState);
 }
 ```
 
+从上述代码中我们可以看到，updateState 实际上是调用 useState 在组件更新时执行的本体——updateReducer。也就是说，在函数组件更新时，useState 和 useReducer 所执行的逻辑是一样的。
+
+首先我们从 useState 和 useReducer 使用的角度来看看，为什么 useState 能使用 useReducer 的逻辑，以及上面的 basicStateReducer 参数究竟是什么。
+
+如下为 useState 的使用方式，可以使用两种传参方式去修改 state 的值
+
+```javascript
+const [count, setCount] = useState(0);
+// 直接传入目标值
+setCount(100);
+// 传入计算函数
+setCount((n) => n + 1);
+```
+
+而实际上，我们使用 useReducer 也能实现上述目标
+
+```javascript
+function reducer(state, action) {
+  if (typeof action === "function") {
+    // action为函数时，将当前state传入，并将其返回值视为新的state
+    return action(state);
+  } else {
+    // action不为函数，则直接将其设置为新的state
+    return action;
+  }
+}
+
+const [count, dispatch] = useReducer(reducer, 0);
+// 直接传入具体值修改count
+dispatch(100);
+// 传入计算函数
+dispatch((n) => n + 1);
+```
+
+从上面 useState 和 useReducer 的使用对比，可以看出 useState 实际上就是一个简易版的 useReducer，是一个 React 帮我们写好 reducer 函数，并且没有 action.type（即 reducer 中没有多种逻辑）的功能单一的 useReducer。
+
+上面提到了 updateState 执行时，会返回 updateReducer(basicStateReducer, initialState)的返回值。其中 initialState 参数就是 useState 的参数，而 basicStateReducer 实际上就是上面提到的“React 帮我们写好的 reducer”，逻辑与我们上面编写的 reducer 函数一样，源码如下所示
+
+```javascript
+// 最基础的reducer，action是“普通值”或“接收当前值并返回新值的函数”。（即setXXX的参数）
+function basicStateReducer(prevState, action) {
+  return typeof action === "function" ? action(prevState) : action;
+}
+```
+
+接下来我们首先从宏观上理解为什么 useState 能帮助函数组件记忆并计算出最新 state 值。
+
+useState 在函数组件更新时，执行的“本体”的 updateState 函数，从宏观上它会执行如下操作，计算出最新的 state，储存并返回出来供函数组件使用：
+
+1. 取出基础值：updateState 从 hook.baseState 取出上一次的 state 值（因可能存在因优先级不匹配而跳过更新的情况，baseState 记录上一次跳过更新后的基础状态，而 hook.memoizedState 记录的是上次渲染结果的状态）。
+2. 获取更新链表：使用 hook.baseQueue（储存可能存在的上次渲染因优先级不匹配而被跳过的更新对象链表）与 hook.queue.pending（本次渲染的新的更新链表）合并，然后按照 lanes 优先级过滤（即假设本次渲染为高优先渲染，则过滤掉优先级不匹配的更新对象），将被过滤掉但需要暴力的更新对象链表存储回 baseQueue 中（供下次渲染时使用），得出最终要更新的 update 链表。
+3. 根据 baseState 及最终的 update 链表，依次计算，并得出 state 的最终值，写到 hook.memoizedState 和 hook.baseState 上。
+4. 将最终值返回，供函数组件使用。
 
 #### useEffect
 
