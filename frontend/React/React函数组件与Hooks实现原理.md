@@ -550,7 +550,7 @@ function dispatchAction(
 
 ```javascript
 function updateState(initialState) {
-  //  实质上是调用 useReducer 的 updateReducer函数
+  //  实质上是调用 useReducer 的 updateReducer 函数
   return updateReducer(basicStateReducer, initialState);
 }
 ```
@@ -563,9 +563,9 @@ function updateState(initialState) {
 
 ```javascript
 const [count, setCount] = useState(0);
-// 直接传入目标值
+// 方式一：直接传入目标值
 setCount(100);
-// 传入计算函数
+// 方式二：传入计算函数
 setCount((n) => n + 1);
 ```
 
@@ -591,7 +591,7 @@ dispatch((n) => n + 1);
 
 从上面 useState 和 useReducer 的使用对比，可以看出 useState 实际上就是一个简易版的 useReducer，是一个 React 帮我们写好 reducer 函数，并且没有 action.type（即 reducer 中没有多种逻辑）的功能单一的 useReducer。
 
-上面提到了 updateState 执行时，会返回 updateReducer(basicStateReducer, initialState)的返回值。其中 initialState 参数就是 useState 的参数，而 basicStateReducer 实际上就是上面提到的“React 帮我们写好的 reducer”，逻辑与我们上面编写的 reducer 函数一样，源码如下所示
+上面 updateState 的源码中提到了，updateState 执行时，会返回 updateReducer(basicStateReducer, initialState)的返回值。其中 initialState 参数就是 useState 的参数，而 basicStateReducer 实际上就是上面提到的“React 帮我们写好的 reducer 函数”，逻辑与我们上面编写的 reducer 函数一样，源码如下所示
 
 ```javascript
 // 最基础的reducer，action是“普通值”或“接收当前值并返回新值的函数”。（即setXXX的参数）
@@ -605,9 +605,72 @@ function basicStateReducer(prevState, action) {
 useState 在函数组件更新时，执行的“本体”的 updateState 函数，从宏观上它会执行如下操作，计算出最新的 state，储存并返回出来供函数组件使用：
 
 1. 取出基础值：updateState 从 hook.baseState 取出上一次的 state 值（因可能存在因优先级不匹配而跳过更新的情况，baseState 记录上一次跳过更新后的基础状态，而 hook.memoizedState 记录的是上次渲染结果的状态）。
-2. 获取更新链表：使用 hook.baseQueue（储存可能存在的上次渲染因优先级不匹配而被跳过的更新对象链表）与 hook.queue.pending（本次渲染的新的更新链表）合并，然后按照 lanes 优先级过滤（即假设本次渲染为高优先渲染，则过滤掉优先级不匹配的更新对象），将被过滤掉但需要暴力的更新对象链表存储回 baseQueue 中（供下次渲染时使用），得出最终要更新的 update 链表。
+2. 获取更新链表：使用 hook.baseQueue（储存可能存在的上次渲染因优先级不匹配而被跳过的更新对象链表）与 hook.queue.pending（本次渲染的新的更新链表）合并，然后按照 lanes 优先级过滤（即假设本次渲染为高优先渲染，则过滤掉优先级不匹配的更新对象），将被过滤掉但需要保留的更新对象链表存储回 baseQueue 中（供下次渲染时使用），得出最终要更新的 update 链表。
 3. 根据 baseState 及最终的 update 链表，依次计算，并得出 state 的最终值，写到 hook.memoizedState 和 hook.baseState 上。
 4. 将最终值返回，供函数组件使用。
+
+如下是 updateReducer 的伪代码，旨在梳理 updateState 的主体流程
+
+```javascript
+function updateReducer(
+  hook,
+  reducer,
+  renderLane, // 本次渲染的优先级（车道）
+) {
+  const queue = hook.queue;
+
+  // 1) 合并“待处理”的 pending（环形）与历史的 baseQueue（线性）
+  const pending = queue.pending;
+  let first = mergeQueuesLinear(hook.baseQueue, pending);
+
+  // 清空 pending（已并入）
+  queue.pending = null;
+
+  // 如果没有任何更新，直接复用上次的 memoizedState
+  if (!first) {
+    return hook.memoizedState;
+  }
+
+  // 2) 回放更新链
+  let newState = hook.baseState;   // 从 baseState 起算
+  let newBaseState = newState;     // 如果发生“跳过”，会更新它
+  let newBaseQueueHead = null;
+  let newBaseQueueTail = null;
+
+  let u = first;
+  while (u) {
+    // 计算本次当前更新对象是否匹配当前更新优先级
+    const shouldProcess = includesLane(renderLane, u.lane);
+
+    if (shouldProcess) {
+      // 满足本次优先级：真正“吃掉并计算”
+      newState = reducer(newState, u.action);
+    } else {
+      // 优先级不够：跳过，但要“克隆”到 newBaseQueue，未来保留
+      const clone: Update<S> = { lane: u.lane, action: u.action, next: null };
+
+      if (!newBaseQueueHead) {
+        newBaseQueueHead = newBaseQueueTail = clone;
+        // 一旦有跳过，未来的回放“起点”必须更新为当前已算出的 newState
+        newBaseState = newState;
+      } else {
+        newBaseQueueTail!.next = clone;
+        newBaseQueueTail = clone;
+      }
+    }
+
+    u = u.next;
+  }
+
+  // 3) 写回 hook 各字段（这就是 useState 在本次渲染后的可见结果）
+  hook.memoizedState = newState;           // 本次渲染最终 state
+  hook.baseState = newBaseState;           // 未来回放起点（若无跳过，等于 newState）
+  hook.baseQueue = newBaseQueueHead;       // 未来要继续处理的“跳过更新”链
+  queue.lastRenderedState = newState;      // 记录用
+
+  return newState;
+}
+```
 
 #### useEffect
 
@@ -760,3 +823,14 @@ function updateEffectImpl(fiberFlags, hookFlags, create, deps) {
 总结一下：其实 mountEffect 和 updateEffect 的执行时间在 React 的 render 阶段。
 它们的目的在于创建、更新 effect 对象，并将其挂载到 hook.memoizedState 和 fiber.updateQueue 链表上。而不会执行执行副作用函数和 cleanup 函数。/
 在 commit 阶段，React 会遍历 fiber.updateQueue 链表，根据每个 effect 的 tag 属性判断是否需要执行清理函数和副作用函数。从而完成整个 useEffect 的执行流程。
+
+# 总结
+本文主要梳理了Hooks出现的动机与意义
+
+以及分析hook在React运行时的数据结构与储存方式
+
+梳理了在组件初次渲染和更新时，每个hook会执行不同的“本体”，一般为mountXXX和updateXXX，而React会通过ReactCurrentDispatcher.current指向当前所需的“hooks本体集合”
+
+然后我们以useState和useEffect为例子，探讨了hooks在组件首次渲染时和更新时的表现。梳理了:
+1. 为什么hooks必须要在函数组件顶部使用而不能在条件语句中使用。
+2. hook
