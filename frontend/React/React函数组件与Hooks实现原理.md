@@ -521,7 +521,9 @@ dispatch 函数实际上就是 dispatchSetState 函数调用 bind 绑定了两�
 
 至于它是如何知道要挂载到哪个 hook 的 queue 上的，答案就在于其参数上。
 
-如下是精简后的 dispatchSetState 的伪代码
+如下是精简后的 dispatchSetState 的伪代码：\
+此函数实际上需要接收三个参数，而我们平时调用 setXXX 函数时，只需传入具体的值或一个回调函数。此时我们传入的其实是第三个参数，前两个参数会在 mountState 执行时，使用 bind 帮我们绑定，把对应的 fiber 节点和 hook.queue 绑定。
+这样就能确保调用 setXX 函数时，如何正确更新对应的 state 了。
 
 ```javascript
 function dispatchSetState(
@@ -561,28 +563,31 @@ function dispatchSetState(
   }
 
   // 步骤三：挂载update对象（update对象链表会以环形链表的方式储存）
-  const pending = queue.pending;
+  const pending = queue.shared.pending; // update队列
   if (pending === null) {
     // 是第一次更新
     update.next = update; // 当前update对象指向自己，形式环状
   } else {
     // 不是第一次更新
-    update.next = pending.next; // 当前update对象指向queue.pending.next（即第一个加入的update）
-    pending.next = update; // queue.pending.next指向当前update对象（链表中最迟加入的的update指向当前update）
+    update.next = pending.next; // 当前update对象指向pending.next（即第一个加入的update）
+    pending.next = update; // pending.next指向当前update对象（链表中最迟加入的的update指向当前update）
   }
-  queue.pending = update; // queue.pending 指向当前update
+  queue.pending = update; // pending 指向当前update
 
-  // queue.pending 指向最后加入的update
-  // queue.pending.next 指向第一个加入的update
+  // queue.shared.pending 指向最后加入的update
+  // queue.shared.pending.next 指向第一个加入的update
   // todo:上面必须画图
 
-  // 步骤四调度更新操作（并非同步执行，具体调度逻辑由 scheduler 执行）
+  // 步骤四：调度更新操作（并非同步执行，具体调度逻辑由 scheduler 执行）
   scheduleUpdateOnFiber(fiber, expirationTime);
 }
 ```
 
-如上源码所示，dispatchSetState 实际上需要接收三个参数，而我们平时调用 setXXX 函数时，只需传入具体的值或一个回调函数。此时我们传入的其实是第三个参数，前两个参数会在 mountState 执行时，使用 bind 帮我们绑定，把对应的 fiber 节点和 hook.queue 绑定。
-这样就能确保调用 setXX 函数时，如何正确更新对应的 state 了。
+拓展：上面代码提到的，update 对象链表以环形链表存放于pending属性上。示意图如下所示
+
+关键点为：
+- queue.shared.pending 指向最后加入的update
+- queue.shared.pending.next 指向第一个加入的update
 
 ##### 函数组件更新：updateState
 
