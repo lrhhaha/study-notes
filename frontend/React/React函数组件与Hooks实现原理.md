@@ -574,20 +574,20 @@ function dispatchSetState(
   }
   queue.pending = update; // pending 指向当前update
 
-  // queue.shared.pending 指向最后加入的update
-  // queue.shared.pending.next 指向第一个加入的update
-  // todo:上面必须画图
-
   // 步骤四：调度更新操作（并非同步执行，具体调度逻辑由 scheduler 执行）
   scheduleUpdateOnFiber(fiber, expirationTime);
 }
 ```
 
-拓展：上面代码提到的，update 对象链表以环形链表存放于pending属性上。示意图如下所示
+拓展：上面代码提到的，update 对象链表以环形链表存放于 fiber 节点的 queue.shared.pending 属性上。
+
+示意图如下所示，其中三个 update 对象的加入顺序为：1->2->3
+![update链表储存结构](../assets/images/React/hooks/update链表存储结构.png)
 
 关键点为：
-- queue.shared.pending 指向最后加入的update
-- queue.shared.pending.next 指向第一个加入的update
+
+- queue.shared.pending 指向最后加入的 update
+- queue.shared.pending.next 指向第一个加入的 update
 
 ##### 函数组件更新：updateState
 
@@ -800,24 +800,10 @@ function pushEffect(tag, create, destroy, deps) {
 }
 ```
 
-需要注意的是 fiber.updateQueue 中，是以环形链表的方式存储，并且其 lastEffect 属性指向最后一个 effect 对象。
-假设我们在一个函数组件中这么写：
+需要注意的是 fiber.updateQueue 中，也是以环形链表的方式存储，并且其 lastEffect 属性指向最后一个 effect 对象。\
+假如有三个effect对象依次加入，则它们的储存结构如下所示:
 
-```javascript
-useEffect(() => {
-  console.log(1);
-}, [props.a]);
-useEffect(() => {
-  console.log(2);
-}, []);
-useEffect(() => {
-  console.log(3);
-}, []);
-```
-
-那么此函数组件对应的 fiber 节点如下所示
-todo：画图
-![alt text](image.png)
+![effect链表储存结构](../assets/images/React/hooks/effect链表储存结构.png)
 
 ##### 函数组件更新：updateEffect
 
@@ -867,6 +853,7 @@ function updateEffectImpl(fiberFlags, hookFlags, create, deps) {
   );
 }
 ```
+
 其实 mountEffect 和 updateEffect 的执行时间在 React 的 render 阶段。它们的目的在于创建、更新 effect 对象，并将其挂载到 hook.memoizedState 和 fiber.updateQueue 链表上。而不会直接执行执行副作用函数和 cleanup 函数。\
 在 commit 阶段，React 会遍历 fiber.updateQueue 链表，根据每个 effect 的 tag 属性判断是否需要执行清理函数和副作用函数。从而完成整个 useEffect 的执行流程。
 
