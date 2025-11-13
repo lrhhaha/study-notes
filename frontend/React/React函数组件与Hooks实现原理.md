@@ -292,7 +292,7 @@ renderWithHooks(
 
 - 第二点主要阐述各个 Hooks 是如何运行的，虽然各个 Hooks 的具体逻辑有所不同，但大致过程是相同的。这一点会在下文详细展开。
 
-- 第三点中提到当 Component 执行完毕之后，会将 ReactCurrentDispatcher.current 指向 ContextOnlyDispatcher 对象。此对象就是类似 HooksDispatcherOnMount 和 HooksDispatcherOnUpdate 的 Hooks 集合，只不过里面的 hooks 大都指向同一个 throwInvalidHookError 函数。
+- 第三点中提到当 Component 执行完毕之后，会将 ReactCurrentDispatcher.current 指向 ContextOnlyDispatcher 对象。此对象就是类似 HooksDispatcherOnMount 和 HooksDispatcherOnUpdate 的 Hooks 集合，只不过里面的 Hooks 大都指向同一个 throwInvalidHookError 函数。
 
 ```javascript
 export const ContextOnlyDispatcher: Dispatcher = {
@@ -318,8 +318,8 @@ function throwInvalidHookError() {
 }
 ```
 
-其作用是确保 hooks 只能在函数内部被调用，否则就会抛出错误。回看上面的图片会发现，当函数组件将要被调用时，会经历三个阶段`赋值ReactCurrentDispatcher.current -> 执行Component函数 -> 赋值ReactCurrentDispatcher.current`，即 **ReactCurrentDispatcher.current 只有在函数组件被执行的期间才会正确指向 HooksDispatcherOnMount 或 HooksDispatcherOnUpdate**，其他时间都会指向 ContextOnlyDispatcher。\
-这就是为什么如果在函数组件之外调用 hooks 那么就会报错的原因。
+其作用是确保 Hooks 只能在函数内部被调用，否则就会抛出错误。回看上面的图片会发现，当函数组件将要被调用时，会经历三个阶段`赋值ReactCurrentDispatcher.current -> 执行Component函数 -> 赋值ReactCurrentDispatcher.current`，即 **ReactCurrentDispatcher.current 只有在函数组件被执行的期间才会正确指向 HooksDispatcherOnMount 或 HooksDispatcherOnUpdate**，其他时间都会指向 ContextOnlyDispatcher。\
+这就是为什么如果在函数组件之外调用 Hooks 那么就会报错的原因。
 
 ## Hooks 执行
 
@@ -365,9 +365,9 @@ function mountWorkInProgressHook() {
 
 #### 组件更新 - updateWorkInProgressHook
 
-对于是 update 时重新渲染的组件，它们的各个 Hook 已经拥有了各自的 hook 对象并挂载到 currnet fiber 的 memoizedState 链表上，所以现在我们需要根据 currnet fiber 树中的 hooks 链表生成当前渲染的 workInProgress fiber 树的 hooks 链表，使组件更新前后 hooks 链表结构一致。
+对于是 update 时重新渲染的组件，它们的各个 Hook 已经拥有了各自的 hook 对象并挂载到 currnet fiber 的 memoizedState 链表上，所以现在我们需要根据 currnet fiber 树中的 hooks 链表生成当前渲染的 workInProgress fiber 树的 Hooks 链表，使组件更新前后 Hooks 链表结构一致。
 
-具体做法是维护以下两个指针辅助 workInProgress fiber 树生成 hooks 链表：
+具体做法是维护以下两个指针辅助 workInProgress fiber 树生成 Hooks 链表：
 
 - currentHook：指向 current Fiber 树（上次渲染）的 Hook 链表当前位置
 - workInProgressHook：指向 workInProgress Fiber 树（本次渲染）已构建链表的末尾
@@ -869,8 +869,8 @@ Hooks 本质是普通 JS 函数，在函数组件执行过程中被调用，而�
 
 在组件初次渲染和更新时，每个 hook 会执行不同的“本体”，一般命名为 mountXXX 和 updateXXX，而 React 会通过 ReactCurrentDispatcher.current 指向当前所需的“hooks 本体集合”，从中取出所需的“本体函数”。
 
-然后我们以 useState 和 useEffect 为例子，探讨了 hooks 在组件首次渲染时和更新时的表现。梳理了:
+然后我们以 useState 和 useEffect 为例子，探讨了 Hooks 在组件首次渲染时和更新时的表现。梳理了:
 
-- hooks 必须要在函数组件顶部使用而不能在条件语句等语句中使用的原因是，hooks 会以链表的方式存储在 fiber.memoizedState 上，每次函数组件的执行，都会拿着 hooks 链条与 Hooks 一一匹配，如果 Hooks 嵌套在其他语句中使用，则可能出现匹配错乱的问题。
+- Hooks 必须要在函数组件顶部使用而不能在条件语句等语句中使用的原因是，hooks 会以链表的方式存储在 fiber.memoizedState 上，每次函数组件的执行，都会拿着 Hooks 链条与 Hooks 一一匹配，如果 Hooks 嵌套在其他语句中使用，则可能出现匹配错乱的问题。
 - hook 对象分别由 mountWorkInProgressHook 和 updateWorkInProgressHook 来创建及获取。
 - 函数组件状态管理和副作用管理的逻辑。
