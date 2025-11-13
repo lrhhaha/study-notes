@@ -1,6 +1,6 @@
 # 前言
 
-我们在编写 React 应用的时候，会使用函数组件配合 Hooks 实现状态管理及其他能力，这一切都是那么的顺理成章，然而大家是否有深究过为何函数组件需要使用各种 Hooks 来实现其他能力，以及 Hooks 的本质究竟是什么？为什么它们的使用需要严格按照规范，这背后的原理究竟是什么？
+我们在编写 React 应用的时候，会使用函数组件配合 Hooks 实现状态管理及其他能力，然而大家是否有深究过为何函数组件需要使用各种 Hooks 来实现其他能力，以及 Hooks 的本质究竟是什么？为什么它们的使用需要严格按照规范，这背后的原理究竟是什么？
 
 本文将针对上述问题展开探讨，分析 Hooks 的本质，以及它们如何与函数组件进行结合，从而辅助函数组件实现各种功能的。
 
@@ -34,7 +34,7 @@ export default (props) => (
 
 ### 组件间难以复用状态逻辑
 
-类组件中没有实现逻辑复用的原生方案，如果需要在多个组件中复用逻辑，只能通过 HOC（高阶组件）或 Render Props 辅助，代码实现比较麻烦，而且多层嵌套后还会形成“嵌套地狱”的问题。
+类组件中没有实现逻辑复用的原生方案，如果需要在多个组件中复用逻辑，只能通过 [HOC（高阶组件）](https://zh-hans.legacy.reactjs.org/docs/higher-order-components.html) 或 [Render Props](https://zh-hans.legacy.reactjs.org/docs/render-props.html) 辅助，代码实现比较麻烦，而且多层嵌套后还会形成“嵌套地狱”的问题。
 
 ### 逻辑分散，复杂组件变得难以理解
 
@@ -208,7 +208,7 @@ export function renderWithHooks(
 
 ## Hook 的数据结构
 
-接下来我们聊一下 Hooks 执行之后，会生成什么样的数据结构进行存储。
+接下来我们聊一下 Hooks 执行之后，会生成什么样的数据结构进行存储。\
 在源码中，我们可以看到执行之后的 Hook 会以对象的形式存储。而每个 Hook 对象可能会拥有不同的属性，或同名属性有不同的用途，这需要根据具体 Hooks 具体分析。
 
 如下展示的是 useState 的 hook 对象，拥有如下 5 个属性：
@@ -581,7 +581,7 @@ function dispatchSetState(
 
 拓展：上面代码提到的，update 对象链表以环形链表存放于 fiber 节点的 queue.shared.pending 属性上。
 
-示意图如下所示，其中三个 update 对象的加入顺序为：1->2->3
+示意图如下所示，其中三个 update 对象的加入顺序为：update1 -> update2 -> update3
 ![update链表储存结构](../assets/images/React/hooks/update链表存储结构.png)
 
 关键点为：
