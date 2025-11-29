@@ -874,3 +874,6 @@ Hooks 本质是普通 JS 函数，在函数组件执行过程中被调用，而�
 - Hooks 必须要在函数组件顶部使用而不能在条件语句等语句中使用的原因是，hooks 会以链表的方式存储在 fiber.memoizedState 上，每次函数组件的执行，都会拿着 Hooks 链条与 Hooks 一一匹配，如果 Hooks 嵌套在其他语句中使用，则可能出现匹配错乱的问题。
 - hook 对象分别由 mountWorkInProgressHook 和 updateWorkInProgressHook 来创建及获取。
 - 函数组件状态管理和副作用管理的逻辑。
+
+# 参考
+https://juejin.cn/post/6944863057000529933
