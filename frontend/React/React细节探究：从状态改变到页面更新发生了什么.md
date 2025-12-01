@@ -1,19 +1,5 @@
 # 前言
 
-# 宏观过程
-
-调用 setState 函数（尝试）更改状态
-
-创建更新对象
-
-调度渲染任务的执行
-
-scheduler 通过 messageChannel 发起任务调度
-
-render 阶段
-
-commit 阶段
-
 # 过程拆分
 
 ## 从状态更新说起
@@ -117,7 +103,7 @@ beginWork 中会先进行 bailout 优化的判断（根据 fiber 的 lanes 及 c
 
 todo：画一棵树说明此循环过程
 
-#### 总结：Fiber 构建循环中时间切片的判断时机
+### 总结：Fiber 构建循环中时间切片的判断时机
 
 > performUnitOfWork 被包裹在循环中执行，那每个 performUnitOfWork 执行完毕的时机为：`找到下一个需要执行beginWork逻辑的fiber节点`。\
 > 当处于“递”的过程且当前 fiber 节点有子节点时，`下一个需要执行beginWork的节点`就是其第一个子节点。\
