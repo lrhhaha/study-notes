@@ -1,17 +1,31 @@
 # 前言
 
+本文的主题为：在React应用中，从组件状态改变到页面更新发生了什么。
+
+主要目的是通过这个过程，将前几篇零散的React源码知识串连起来，形成知识网络，便于理解。
+
+所以本文将不会过多介绍React中的一些概念。
+
 # 过程拆分
+
+接下来我们会将整个过程按照发生的顺序进行拆分：
+
+- 状态发生改变
+- scheduler调度渲染任务
+- render/reconcile 阶段
+- commit 阶段
 
 ## 从状态更新说起
 
-React 组件的重新，一般是由状态更新而引起的。
-也就是由 useState 返回的 setState 函数的调用所引起的。
+React 组件的重新，一般是由状态更新而引起的。也就是由 useState 返回的 setState 函数的调用所引起的。本小节将梳理 setState 函数被调用后发生了什么。
 
-本小节将梳理 setState 函数被调用后发生了什么
+setState 函数在源码中的体现是 dispatchSetState 函数，其接收 3 个参数作为函数。
 
-setState 函数在源码中的体现是 dispatchSetState 函数，其接收 3 个参数作为函数
+- fiber fiber节点的引用
+- queue 当前hook对象的update对象链表
+- action setXXX的参数，可为函数或普通值
 
-然后在 useState 执行时，会使用 bind 函数提前绑定其前两个参数，然后将返回的新函数命名为 setState，然后作为 useState 返回值的第二个元素。
+然后在 useState 执行时，会使用 bind 函数提前绑定其前两个参数（这就是为什么React知道当setXXX被调用时，究竟需要修改哪个组件的哪个状态的原因），然后将返回的新函数命名为 setState，然后作为 useState 返回值的第二个元素。
 
 所以平时我们在调用 setState 函数时，只需传入一个值（具体值或函数），作为 dispatchSetState 的第三个函数而执行。
 
@@ -26,18 +40,24 @@ dispatchSetState 函数执行时，具体会执行以下几个步骤：
 
 ## scheduler 任务调度
 
-scheduler 基于 messageChannel 发起任务的调度（messageChannel 的通信是宏任务，浏览器通过事件循环机制调控）。
+scheduler 基于 MessageChannel 发起任务的调度，MessageChannel 的通信是宏任务，浏览器通过事件循环机制调控，确保不会阻塞现有任务。
 
-当进入任务执行阶段时，scheduler 从任务池中（通过小顶堆）取出优先级最高的任务执行。
+当进入任务执行阶段时，scheduler 从任务池中（通过小顶堆的方式）取出优先级最高的任务执行。
 
-scheduler 会有一个任务调度循环，此循环的主要目的是防止因任务的执行而导致主线程被长期阻塞。解决手段为使用时间切片，`每执行完一个任务之后，调用shouldYieldToHost函数判断当前时间切片是否已经耗尽，是的话则让出主线程，并发起下一轮的任务调度；否则继续取出下一个任务执行`。
+但任务执行的过程并非只是以同步的方式执行，因为一个渲染任务可能是比较庞大的，如果以同步的方式执行，则会阻塞主线程，导致用户的一些操作（如文本输入、UI交互）需要较长时间才会得到反馈，让用户产生应用卡顿的感觉。
+
+为了使任务执行过程中能`及时响应`用户操作，scheduler会采用时间切片 + 任务调度循环 + 优先级模型的方式进行调控。
+
+具体而言就是以时间片为单位执行任务，每执行完一个任务之后，会调用shouldYieldToHost函数判断当前时间片是否耗尽：如没耗尽则取出下一个任务执行；如耗尽则让出主线程并发起下一次任务调度。
+
 todo：图片
+
 
 =================
 
 - schedulePerformWorkUntilDeadline 请求任务调度（通过 MessageChannel 发送消息）
 
-- performWorkUntilDeadline 响应任务调度请求
+- performWorkUntilDeadline 响应任务调度请求（监听）
 
   - workLoop 执行 scheduler 层的工作循环（执行具体渲染任务，并调用 shouldYieldToHost 判断），返回值 hasMoreWork 为是否有剩余任务
   - 根据 hasMoreWork 决定是否调用 schedulePerformWorkUntilDeadline 请求下一次的任务调度
