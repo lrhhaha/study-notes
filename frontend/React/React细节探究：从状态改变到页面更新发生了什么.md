@@ -50,18 +50,17 @@ scheduler 基于 MessageChannel 发起任务的调度，MessageChannel 的通信
 
 具体而言就是以时间片为单位执行任务，每执行完一个任务之后，会调用 shouldYieldToHost 函数判断当前时间片是否耗尽：如没耗尽则取出下一个任务执行；如耗尽则让出主线程并发起下一次任务调度。
 
-todo：图片
+具体历程如图所示
+![scheduler任务调度循环](../assets/images/时间片工作循环.png)
 
-=================
-
-- schedulePerformWorkUntilDeadline 请求任务调度（通过 MessageChannel 发送消息）
-
-- performWorkUntilDeadline 响应任务调度请求（监听）
-
-  - workLoop 执行 scheduler 层的工作循环（执行具体渲染任务，并调用 shouldYieldToHost 判断），返回值 hasMoreWork 为是否有剩余任务
-  - 根据 hasMoreWork 决定是否调用 schedulePerformWorkUntilDeadline 请求下一次的任务调度
-
-================
+> 关键源码函数：
+>
+> - schedulePerformWorkUntilDeadline 请求任务调度（通过 MessageChannel 发送消息）
+>
+> - performWorkUntilDeadline 响应任务调度请求（MessageChannel 另一个端口的 onmessage 函数）
+>
+>   - workLoop 执行 scheduler 层的工作循环（执行具体渲染任务，并调用 shouldYieldToHost 判断时间片是否耗尽），返回值 hasMoreWork 为是否有剩余任务
+>     - 根据 hasMoreWork 决定是否调用 schedulePerformWorkUntilDeadline 请求下一次的任务调度
 
 上面描述的任务层面的工作循环实际上并不够细致，因为其判断当前时间切片是否耗尽的时间点是在`每个任务执行完毕之后`，但如果一个渲染任务非常庞大，它的执行时间远超时间片本身，那么同样会导致长时间阻塞主线程的情况出现。
 
@@ -71,27 +70,29 @@ todo：图片
 
 当 scheduler 取出一个渲染任务并执行时，则进入了 render/reconcile 阶段。
 
-> 在Fiber架构的背景下，一个渲染任务会被拆分为多个工作单元（即 fiber 节点）。
+在 Fiber 架构的背景下，一个渲染任务会被拆分为多个工作单元（即 fiber 节点）。
 
-所以一个渲染任务的执行过程，可视为其工作单元的执行过程，当一个任务的全部工作单元执行完毕，则视为当前渲染任务执行完毕。（每个工作单元的目的为生成当前节点的workInProgress节点）。
+所以一个渲染任务的执行过程，可视为其工作单元的执行过程，当一个任务的全部工作单元执行完毕，则视为当前渲染任务执行完毕。（每个工作单元的目的为生成当前节点的 workInProgress 节点）。
 
-整个render/reconcile阶段可视为循环执行 preformUnitOfWork 的过程，每执行一次 performUnitOfWork 可视为执行一个工作单元，生成当前节点对应的 workInProgress fiber 节点。
+整个 render/reconcile 阶段可视为循环执行 preformUnitOfWork 的过程，每执行一次 performUnitOfWork 可视为执行一个工作单元，生成当前节点对应的 workInProgress fiber 节点。
 
 同样地，为了防止遍历执行工作单元而长期阻塞主线程，在循环执行 preformUnitOfWork 的过程中，也会有一个工作循环（可称为 Fiber 构建循环）用于判断当前时间切片是否使用完毕，从而决定让出主线程还是继续执行下一个工作单元。
 
-值得一提的是，此 Fiber 构建循环是在 eact-reconciler 包中，而不是 Scheduler 包中，因为 Fiber 工作单元的执行属于协调过程。
+值得一提的是，此 Fiber 构建循环是在 react-reconciler 包中，而不是 Scheduler 包中，因为 Fiber 工作单元的执行属于协调过程。
 
-todo：图片
+scheduler 任务调度循环与 fiber 构建循环的关系如下图所示：
+![fiber构建循环](../assets/images/React双workLoop.png)
 
-===============
-渲染任务执行的过程，实际就是工作单元执行的过程
+fiber 构建循环关键代码如下所示
 
-Fiber 构建循环如下
-
-- workLoopConcurrent
-  - workInProgress !== null && !shouldYield()，则执行下一个工作单元
-
-===============
+```javascript
+function workLoopConcurrent() {
+  // Perform work until Scheduler asks us to yield
+  while (workInProgress !== null && !shouldYield()) {
+    performUnitOfWork(workInProgress); // 执行单个工作单元
+  }
+}
+```
 
 ### performUnitOfWork
 
@@ -103,8 +104,34 @@ performUnitOfWork 可视为两个阶段：
 2. completeWork：标记 flags 及 subtreeFlags，创建 DOM 元素及标记 update
 
 > 注意：虽然 performUnitOfWork 可分为 beginWork 和 completeWork 两个阶段，但并非一个工作单元执行完其 beginWork 和 completeWork 的逻辑，再执行下一个工作单元的 beginWork 和 complete。\
-> 而是属于一个递归的过程：先从根节点往下执行其第一个子元素的 beginWork 逻辑，此过程为“递”；到达叶子节点之后，再往上执行 completeWork 的“归”操作。\
-> 具体顺序可理解为：parent:beginWork -> child:beginWork -> child:completeWork -> sibling:beginWork -> sibling:completeWork -> parent:completeWork
+>
+> 而是属于一个递归的过程：
+>
+> - 递：先从根节点开始往下，执行其`第一个子节点`的 beginWork 逻辑，然后再以此节点作为出发点，寻找其第一个节点点执行 beginWork，如此往复；
+> - 归：到达叶子节点之后，执行其 completeWork 逻辑，然后寻找下一个需要执行 beginWork 的节点（先寻找兄弟节点，再寻找父级节点）。
+
+具体顺序可理解为：parent:beginWork -> child:beginWork -> child:completeWork -> sibling:beginWork -> sibling:completeWork -> parent:completeWork
+
+配合 fiber 架构的链式树状结构，整个递归过程可以归纳为：
+![beginWork与completeWork递归](../assets/images/React/从状态改变到组件更新/beginWork与completeWork递归.png)
+
+##### Fiber 构建循环中时间切片的判断时机
+
+performUnitOfWork 被包裹在循环中执行，每个 performUnitOfWork 执行完毕的时机为：`找到下一个需要执行beginWork逻辑的fiber节点`：
+
+- 当处于“递”的过程且当前 fiber 节点有子节点时，`下一个需要执行beginWork的节点`就是其第一个子节点。\
+- 当处于“归”的过程时，如果当前节点有兄弟节点，那么`下一个需要执行beginWork的节点`就是其兄弟节点，否则需要往上执行其 parent 节点的 completeWork 逻辑，然后将其 parent 节点视为当前节点，寻找`下一个需要执行beginWork逻辑的节点`（即找其兄弟节点，如无，再对其 parent 执行 completeWork）。
+
+结合上面提到的 fiber 构建循环的代码可知：在 fiber 构建循环中，时间切片的判读时机为：`找到下一个需要执行beginWork逻辑的fiber节点时`。
+
+```javascript
+function workLoopConcurrent() {
+  while (workInProgress !== null && !shouldYield()) {
+    // 每找到“下一个需要执行beginWork逻辑的fiber节点”时，函数执行完毕，进行一次时间片判断
+    performUnitOfWork(workInProgress);
+  }
+}
+```
 
 #### beginWork
 
@@ -126,12 +153,6 @@ beginWork 中会先进行 bailout 优化的判断（根据 fiber 的 lanes 及 c
 - 对于 HostComponent（如 div、span），创建 DOM 节点或标记 update
 
 todo：画一棵树说明此循环过程
-
-### 总结：Fiber 构建循环中时间切片的判断时机
-
-> performUnitOfWork 被包裹在循环中执行，那每个 performUnitOfWork 执行完毕的时机为：`找到下一个需要执行beginWork逻辑的fiber节点`。\
-> 当处于“递”的过程且当前 fiber 节点有子节点时，`下一个需要执行beginWork的节点`就是其第一个子节点。\
-> 而当处于“归”的过程时，如果当前节点有兄弟节点，那么`下一个需要执行beginWork的节点`就是其兄弟节点，否则需要往上执行其 parent 节点的 completeWork 逻辑，然后将其 parent 节点视为当前节点，寻找`下一个需要执行beginWork逻辑的节点`（即找其兄弟节点，如无，再对其 parent 执行 completeWork）。
 
 ## commit 阶段
 
