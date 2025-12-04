@@ -1,6 +1,6 @@
 # 前言
 
-本文的主题为：在 React 应用中，从组件状态改变到页面更新发生了什么。
+本文的主题为：在 React 应用中，从组件状态改变到页面更新这一过程发生了什么。
 
 主要目的是通过这个过程，将前几篇零散的 React 源码知识串连起来，形成知识网络，便于理解。
 
@@ -26,11 +26,11 @@ React 组件的重新，一般是由状态更新而引起的。也就是由 useS
 
 setState 函数在源码中的体现是 dispatchSetState 函数，其接收 3 个参数作为函数。
 
-- fiber fiber 节点的引用
-- queue 当前 hook 对象的 update 对象链表
-- action setXXX 的参数，可为函数或普通值
+- fiber：fiber 节点的引用
+- queue：当前 hook 对象的 update 对象链表
+- action：setXXX 的参数，可为函数或普通值
 
-然后在 useState 执行时，会使用 bind 函数提前绑定其前两个参数（这就是为什么 React 知道当 setXXX 被调用时，究竟需要修改哪个组件的哪个状态的原因），然后将返回的新函数命名为 setState，然后作为 useState 返回值的第二个元素。
+在 useState 执行时，会使用 bind 函数提前绑定其前两个参数（这就是为什么 React 知道当 setXXX 被调用时，究竟需要修改哪个组件的哪个状态的原因），然后将返回的函数作为 useState 返回值的第二个元素。
 
 所以平时我们在调用 setState 函数时，只需传入一个值（具体值或函数），作为 dispatchSetState 的第三个函数而执行。
 
@@ -40,7 +40,7 @@ dispatchSetState 函数执行时，具体会执行以下几个步骤：
 2. 为本次更新创建 update 对象
 3. 将 update 对象挂载到当前 useState 的 hook 对象的 update 链表上（以环形链表的方式存储）
 4. 调用 scheduleUpdateOnFiber 函数，发起后续更新。
-   1. 从出发更新的 fiber 节点往上寻找其所有直接父节点，并标记此路径上 fiber 节点的 lanes 和 childLanes 属性（以表示当前节点有更新操作或其子孙节点存放更新操作，为后续 render 节点的 bailout 优化做铺垫）
+   1. 从触发更新的 fiber 节点往上寻找其所有直接父节点，并标记此路径上 fiber 节点的 lanes 和 childLanes 属性（以表示当前节点有更新操作或其子孙节点存在更新操作，为后续 render 阶段的 bailout 优化做铺垫）
    2. 将 root 节点丢给 scheduler 发起一次任务调度
 
 ## scheduler 任务调度
@@ -53,11 +53,12 @@ scheduler 基于 MessageChannel 发起任务的调度，MessageChannel 的通信
 
 需要注意的是，任务池中往往不止有一个渲染任务，如果清空任务池的过程是以同步的方式执行的话，则可能会长时间阻塞主线程，导致用户的一些操作（如文本输入、UI 交互）需要较长时间才会得到反馈，让用户产生应用卡顿的感觉。
 
-为了使清空任务池的过程的过程中能`及时响应`用户操作，scheduler 会基于时间切片 + 任务调度循环 + 优先级模型的方式进行调控。
+为了使清空任务池的过程中能`及时响应`用户操作，scheduler 会基于时间切片 + 任务调度循环 + 优先级模型的方式进行调控。
 
-具体而言就是以时间片为单位执行任务，每执行完一个任务之后，会调用 shouldYieldToHost 函数判断当前时间片是否耗尽：如没耗尽则取出下一个任务执行；如耗尽则让出主线程并发起下一次任务调度。
+具体而言就是以时间片为单位执行任务，每执行完一个任务之后，会调用 shouldYieldToHost 函数判断当前时间片是否耗尽：如没耗尽则取出下一个优先级最高的任务执行；如耗尽则让出主线程并发起下一次任务调度。
 
-具体历程如图所示
+具体流程如图所示：
+
 ![scheduler任务调度循环](../assets/images/时间片工作循环.png)
 
 > 关键源码函数：
@@ -79,9 +80,9 @@ scheduler 基于 MessageChannel 发起任务的调度，MessageChannel 的通信
 
 在 Fiber 架构的背景下，一个渲染任务会被拆分为多个工作单元（即 fiber 节点）。
 
-所以一个渲染任务的执行过程，可视为其工作单元的执行过程，当一个任务的全部工作单元执行完毕，则视为当前渲染任务执行完毕。（每个工作单元的目的为生成当前节点的 workInProgress 节点）。
+所以一个渲染任务的执行过程，可视为其工作单元的执行过程，当一个任务的全部工作单元执行完毕，则视为当前渲染任务执行完毕。
 
-整个 render/reconcile 阶段可视为循环执行 preformUnitOfWork 的过程，每执行一次 performUnitOfWork 可视为执行一个工作单元，生成当前节点对应的 workInProgress fiber 节点。
+整个 render/reconcile 阶段可视为循环执行 preformUnitOfWork 的过程，每执行一次 performUnitOfWork 可视为执行一个工作单元。
 
 同样地，为了防止遍历执行工作单元而长期阻塞主线程，在循环执行 preformUnitOfWork 的过程中，也会有一个工作循环（可称为 Fiber 构建循环）用于判断当前时间切片是否使用完毕，从而决定让出主线程还是继续执行下一个工作单元。
 
@@ -110,11 +111,11 @@ performUnitOfWork 可视为两个阶段：
 1. beginWork：通过 diff 算法，高效生成当前 fiber 节点的直接子节点
 2. completeWork：标记 flags 及 subtreeFlags，创建 DOM 元素及标记 update
 
-> 注意：虽然 performUnitOfWork 可分为 beginWork 和 completeWork 两个阶段，但并非一个工作单元执行完其 beginWork 和 completeWork 的逻辑，再执行下一个工作单元的 beginWork 和 complete。\
+> 注意：虽然 performUnitOfWork 可分为 beginWork 和 completeWork 两个阶段，但并非一个工作单元执行完其 beginWork 和 completeWork 的逻辑，再执行下一个工作单元的 beginWork 和 complete。
 >
 > 而是属于一个递归的过程：
 >
-> - 递：先从根节点开始往下，执行其`第一个子节点`的 beginWork 逻辑，然后再以此节点作为出发点，寻找其第一个节点点执行 beginWork，如此往复；
+> - 递：先从根节点开始往下，执行其`第一个子节点`的 beginWork 逻辑，然后再以此节点作为出发点，寻找其第一个子节点执行 beginWork，如此往复；
 > - 归：到达叶子节点之后，执行其 completeWork 逻辑，然后寻找下一个需要执行 beginWork 的节点（先寻找兄弟节点，再寻找父级节点）。
 
 具体顺序可理解为：parent:beginWork -> child:beginWork -> child:completeWork -> sibling:beginWork -> sibling:completeWork -> parent:completeWork
@@ -126,7 +127,7 @@ performUnitOfWork 可视为两个阶段：
 
 performUnitOfWork 被包裹在循环中执行，每个 performUnitOfWork 执行完毕的时机为：`找到下一个需要执行beginWork逻辑的fiber节点`：
 
-- 当处于“递”的过程且当前 fiber 节点有子节点时，`下一个需要执行beginWork的节点`就是其第一个子节点。\
+- 当处于“递”的过程且当前 fiber 节点有子节点时，`下一个需要执行beginWork的节点`就是其第一个子节点。
 - 当处于“归”的过程时，如果当前节点有兄弟节点，那么`下一个需要执行beginWork的节点`就是其兄弟节点，否则需要往上执行其 parent 节点的 completeWork 逻辑，然后将其 parent 节点视为当前节点，寻找`下一个需要执行beginWork逻辑的节点`（即找其兄弟节点，如无，再对其 parent 执行 completeWork）。
 
 结合上面提到的 fiber 构建循环的代码可知：在 fiber 构建循环中，时间切片的判读时机为：`找到下一个需要执行beginWork逻辑的fiber节点时`。
