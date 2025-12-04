@@ -4,7 +4,12 @@
 
 主要目的是通过这个过程，将前几篇零散的 React 源码知识串连起来，形成知识网络，便于理解。
 
-所以本文将不会过多介绍 React 中的一些概念。
+所以本文将不会过多介绍 React 中的一些基础概念，部分核心知识点见文章：
+
+- [fiber 架构](https://github.com/lrhhaha/study-notes/blob/main/frontend/React/React%20%E6%9E%B6%E6%9E%84%E8%AE%BE%E8%AE%A1%EF%BC%9A%E4%BB%8E%20stack%20reconciler%20%E5%88%B0%20fiber%20reconciler%20%E7%9A%84%E6%BC%94%E8%BF%9B.md)
+- [并发任务管理策略](https://github.com/lrhhaha/study-notes/blob/main/frontend/React/%E6%97%B6%E9%97%B4%E5%88%87%E7%89%87%20%2B%20%E5%8F%8C%E5%B7%A5%E4%BD%9C%E5%BE%AA%E7%8E%AF%20%2B%20%E4%BC%98%E5%85%88%E7%BA%A7%E6%A8%A1%E5%9E%8B%EF%BC%9AReact%20%E7%9A%84%E5%B9%B6%E5%8F%91%E4%BB%BB%E5%8A%A1%E7%AE%A1%E7%90%86%E7%AD%96%E7%95%A5.md)
+- [diff 算法](https://github.com/lrhhaha/study-notes/blob/main/frontend/React/React%20%E5%8F%8C%E7%BC%93%E5%AD%98%E6%9E%B6%E6%9E%84%E4%B8%8E%20Diff%20%E7%AE%97%E6%B3%95%E4%BC%98%E5%8C%96.md)
+- [函数组件与 Hooks](https://github.com/lrhhaha/study-notes/blob/main/frontend/React/React%E5%87%BD%E6%95%B0%E7%BB%84%E4%BB%B6%E4%B8%8EHooks%E5%AE%9E%E7%8E%B0%E5%8E%9F%E7%90%86.md)
 
 # 过程拆分
 
@@ -17,7 +22,7 @@
 
 ## 从状态更新说起
 
-React 组件的重新，一般是由状态更新而引起的。也就是由 useState 返回的 setState 函数的调用所引起的。本小节将梳理 setState 函数被调用后发生了什么。
+React 组件的重新，一般是由状态更新而引起的。也就是由 useState 返回的 setState 函数的调用所引起的。本小节将梳理 setState 函数被调用后发生了什么（关于 useState 与 setState 详情，见[文章](https://github.com/lrhhaha/study-notes/blob/main/frontend/React/React%E5%87%BD%E6%95%B0%E7%BB%84%E4%BB%B6%E4%B8%8EHooks%E5%AE%9E%E7%8E%B0%E5%8E%9F%E7%90%86.md#usestate)）。
 
 setState 函数在源码中的体现是 dispatchSetState 函数，其接收 3 个参数作为函数。
 
@@ -39,6 +44,8 @@ dispatchSetState 函数执行时，具体会执行以下几个步骤：
    2. 将 root 节点丢给 scheduler 发起一次任务调度
 
 ## scheduler 任务调度
+
+> 任务调度相关基础，见[文章](https://github.com/lrhhaha/study-notes/blob/main/frontend/React/%E6%97%B6%E9%97%B4%E5%88%87%E7%89%87%20%2B%20%E5%8F%8C%E5%B7%A5%E4%BD%9C%E5%BE%AA%E7%8E%AF%20%2B%20%E4%BC%98%E5%85%88%E7%BA%A7%E6%A8%A1%E5%9E%8B%EF%BC%9AReact%20%E7%9A%84%E5%B9%B6%E5%8F%91%E4%BB%BB%E5%8A%A1%E7%AE%A1%E7%90%86%E7%AD%96%E7%95%A5.md#scheduler)
 
 scheduler 基于 MessageChannel 发起任务的调度，MessageChannel 的通信是宏任务，浏览器通过事件循环机制调控，确保不会阻塞现有任务。
 
@@ -100,7 +107,7 @@ function workLoopConcurrent() {
 
 performUnitOfWork 可视为两个阶段：
 
-1. beginWork：主要工作为生成当前 fiber 节点的直接子节点
+1. beginWork：通过 diff 算法，高效生成当前 fiber 节点的直接子节点
 2. completeWork：标记 flags 及 subtreeFlags，创建 DOM 元素及标记 update
 
 > 注意：虽然 performUnitOfWork 可分为 beginWork 和 completeWork 两个阶段，但并非一个工作单元执行完其 beginWork 和 completeWork 的逻辑，再执行下一个工作单元的 beginWork 和 complete。\
@@ -115,7 +122,7 @@ performUnitOfWork 可视为两个阶段：
 配合 fiber 架构的链式树状结构，整个递归过程可以归纳为：
 ![beginWork与completeWork递归](../assets/images/React/从状态改变到组件更新/beginWork与completeWork递归.png)
 
-##### Fiber 构建循环中时间切片的判断时机
+#### Fiber 构建循环中时间切片的判断时机
 
 performUnitOfWork 被包裹在循环中执行，每个 performUnitOfWork 执行完毕的时机为：`找到下一个需要执行beginWork逻辑的fiber节点`：
 
@@ -135,7 +142,9 @@ function workLoopConcurrent() {
 
 #### beginWork
 
-beginWork 中会先进行 bailout 优化的判断（根据 fiber 的 lanes 及 childLanes 属性判断。bailout 是跳过 re-render，即执行函数组件，而不是不遍历。即进入遍历流程后，发现符合 bailout 条件，则无需 re-render ）。
+beginWork 的主要目的为：为当前节点的直接子节点生成（新生成或复用旧节点） workInProgress 节点，及判断真实 DOM 节点是否可以复用。
+
+在正式开始执行核心逻辑之前，会先进行 bailout 优化的判断（根据 fiber 的 lanes 及 childLanes 属性判断）。bailout 是跳过 re-render，即无需执行函数组件，而不是不遍历。即进入遍历流程后，发现符合 bailout 条件，则无需 re-render 。
 
 - bailout 判断条件：先判断 props / context 的实际值变化 ，再判断 lanes 和 childLanes 是否有工作要做：
   - 如果 props/context 无变化，且 lanes 和 childLanes 都无值，则当前整条分支 bailout（常见于状态更改的兄弟分支）
@@ -149,16 +158,14 @@ beginWork 中会先进行 bailout 优化的判断（根据 fiber 的 lanes 及 c
 
 其作用主要为：
 
-- 标记自身 flags 属性，代表在 commit 阶段需要如何修改 DOM（需要与 effectList 区分开）。以及向上收集 flags，标记父级节点的 subtreeFlags（类似 childLanes，代表其子孙元素是否需要更改 DOM）
+- 标记自身 flags 属性，代表在 commit 阶段需要如何修改 DOM（需要与 effectList 区分开）。以及向上收集 flags，标记父级节点的 subtreeFlags（类似 childLanes，代表其子孙元素是否需要更改 DOM，为后续 commit 阶段的剪枝优化做准备）
 - 对于 HostComponent（如 div、span），创建 DOM 节点或标记 update
-
-todo：画一棵树说明此循环过程
 
 ## commit 阶段
 
 当某个渲染任务执行完毕后（即其中的所有工作单元都执行完了 beginWork / completeWork），React 就会调用 commitRoot 函数进入 commit 阶段。
 
-commit 阶段的主要作用：一次性地把更新提交到真实 DOM 上，并执行副作用函数和生命周期钩子。
+与 render/reconcile 阶段不同，整个 commit 阶段的执行是同步不可中断的。其主要作用：一次性地把更新提交到真实 DOM 上，并执行副作用函数和生命周期钩子。
 
 整个 commit 阶段可理解为有三个同步子阶段 + 一个异步子阶段，分别如下所示：
 
@@ -171,14 +178,16 @@ commit 阶段的主要作用：一次性地把更新提交到真实 DOM 上，�
 
 各个阶段的主要功能如下所示：
 
-- beforeMutation 阶段：处理 DOM 变更前的准备工作，如执行旧的 useLayoutEffect 的 cleanup
-- mutation 阶段：根据 flags 属性，对真实 DOM 更新（插入、更新、删除）
+- beforeMutation 阶段：处理 DOM 变更前的准备工作，如执行`旧的 useLayoutEffect 的 cleanup`
+- mutation 阶段：根据 flags 属性，`对真实 DOM 更新`（插入、更新、删除）
 - （注：一般认为此时会进行 current 树与 workInProgress 树的切换）
-- layout 阶段：ref 的绑定；执行新的 useLayoutEffect 回调，执行 componentDidMount/Update 等生命周期钩子
+- layout 阶段：ref 的绑定；执行`新的 useLayoutEffect 回调`，执行 `componentDidMount/Update` 等生命周期钩子
 - （注：此时浏览器会绘制页面（paint））
 - passive effects 阶段：
-  - 旧的 useEffect cleanup 放入任务队列
-  - 新的 useEffect 回调放入任务队列
+  - `旧的 useEffect cleanup` 放入任务队列
+  - `新的 useEffect 回调`放入任务队列
+
+而上述提到的四个子阶段，并非所有 fiber 阶段都要执行对应的逻辑，而是每个子阶段会有自己的剪枝优化逻辑，会对 fiber 节点的某些属性（如 flags、subtreeFlags）进行判断，如符合要求则某些子树可以跳过当前子阶段逻辑。
 
 > 补充：\
 > 由上述四个子阶段的执行过程可知，useLayoutEffect 和 useEffect 的执行顺序如下：
@@ -191,3 +200,5 @@ commit 阶段的主要作用：一次性地把更新提交到真实 DOM 上，�
 > 6. 新 useEffect 的回调
 
 # 总结
+
+本文以`从状态改变到页面更新`为轴，串联起了 React 中几个核心的源码知识点，主要起到梳理作用，具体每个步骤的详细知识点，还需移步其他文章复习。
